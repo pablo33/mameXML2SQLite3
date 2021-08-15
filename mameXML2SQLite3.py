@@ -345,15 +345,15 @@ def check (file, path):
 	return (fullfilepath, False)
 
 class Bios:
-	def __init__(self):
+	def __init__(self,con):
 		# check if bios folder is present
+		self.con = con
 		if itemcheck(biospath) != "folder":
 			print (f"creating bios folder at: {biospath}")
 			os.makedirs (biospath)
-	def createbiosfolder (self,con):
-		cursor = con.execute ("SELECT name,description FROM games Where isbios = 1")
+	def createbiosfolder (self):
+		cursor = self.con.execute ("SELECT name,description FROM games WHERE isbios = 1")
 		for b in cursor:
-			print (b[0],"\t\t",b[1])
 			self.copybios (b[0])
 
 	def copybios (self,biosname):
@@ -369,7 +369,50 @@ class Bios:
 			return
 		shutil.copyfile (origin[0], dest[0])
 
-# main
+
+class Rom:
+	""" Represents a game,
+		Methods: 
+			copyrom: 	copy this game from romsetfolder to roms folder, 
+						also dependant roms if it is a clone and needed bios.
+	
+		TODO: check rom.zip content to alert on roms and devices.
+		"""
+	def __init__(self,con,romname):
+		if itemcheck(romspath) != "folder":
+			print (f"creating roms folder at: {romspath}")
+			os.makedirs (romspath)
+		self.name, self.cloneof, self.romof, self.isbios = con.execute (f'SELECT name,cloneof,romof, isbios FROM games WHERE name = "{romname}"').fetchone()
+
+	def copyrom (self):
+		""" copy a romgame-pack from the romset folder to the roms folder
+			a romgamepack is formed with rom/clone origin rom, and bios. 
+			todo: list zip files and fix missing roms and devices
+			"""
+		success = self.__copyfile__ (self.name)
+		if self.romof != None:
+			Rom (con, self.romof).copyrom()
+		if self.isbios:
+			Bios (con).copybios(self.name)
+		elif not success:
+			print ("Something Was wrong, some files were not present.")
+		return success
+
+	def __copyfile__ (self,romname):
+		""" copy a romfile to roms folder
+			"""
+		origin 	= check (romname, romsetpath)
+		dest 	= check (romname, romspath)
+		if origin[1] == False:
+			print (f"{romname} file is not present at romset")
+			return False
+		if dest[1] == True:
+			print (f"{romname} file already exist on roms folder.")
+			return True
+		shutil.copyfile (origin[0], dest[0])
+		return True
+
+
 if __name__ == '__main__':
 	########################################
 	# Retrieve cmd line parameters
@@ -413,6 +456,8 @@ if __name__ == '__main__':
 	dbpath = createSQL3(xmlfile)	# Creating or loading a existent SQLite3 Database
 	con = sqlite3.connect (dbpath)	# Connection to SQL database.
 
-	# Create the bios folder
-	cursor = Bios ()
-	cursor.createbiosfolder (con)
+	# Create the bios folder with a copy of all bios
+	# Bios(con).createbiosfolder()
+
+	# Copy a rom from romset to rom folder
+	Rom (con, "sf2").copyrom()
