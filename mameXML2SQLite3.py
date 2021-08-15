@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 # -*- encoding: utf-8 -*-
 
-__version__ = "0.1"
+__version__ = "0.2"
 __author__  = "pablo33"
 __doc__		= """
 	This software parses a MAME XML file into SQLite3 Database.
@@ -9,7 +9,7 @@ __doc__		= """
 	"""
 
 # Standard libray imports
-import os, argparse, sqlite3, re
+import os, argparse, sqlite3, re, shutil
 
 #=====================================
 # Custom Error Classes
@@ -23,12 +23,11 @@ class EmptyStringError(ValueError):
 class ValueNotExpected(ValueError):
 	pass
 
-
 #=====================================
 # Defaults
 #=====================================
-rebuiltDB = True 
-
+rebuildDB 	= False
+romsext		= '.zip'
 
 #=====================================
 # Functions
@@ -50,7 +49,6 @@ def itemcheck(pointer):
 def printlist (mylist):
 	for i in mylist:
 		print (i)
-
 
 def createSQL3 (xmlfile):
 	### Wich tags are retrieved from XML
@@ -291,16 +289,15 @@ def createSQL3 (xmlfile):
 				questions = ",".join("?"*len(r[1])) + ",?"
 				con.execute(f"INSERT INTO devs ({fields}) VALUES ({questions})", values)
 
-
-
 	########################################
-	# Init Database
+	# Checking and initializing the Database
 	########################################
 	dbpath = os.path.splitext(xmlfile)[0] + ".sqlite3"
 
 	if itemcheck (dbpath) == 'file':
-		if not rebuiltDB:
+		if not rebuildDB:
 			print ("Database Found, loading it")
+			return (dbpath)
 		else:
 			os.remove (dbpath)
 			print ("Generating a new SQLite database. Be patient.")
@@ -337,6 +334,40 @@ def createSQL3 (xmlfile):
 	con.close()
 	return (dbpath)
 
+def check (file, path):
+	""" checks if file is present,
+		Todo: check on diverse file extensions
+		Todo: also in conbnation of upper and lower case. 
+		"""
+	fullfilepath = os.path.join(path,file + romsext) 
+	if itemcheck (fullfilepath) == 'file':
+		return (fullfilepath, True)
+	return (fullfilepath, False)
+
+class Bios:
+	def __init__(self):
+		# check if bios folder is present
+		if itemcheck(biospath) != "folder":
+			print (f"creating bios folder at: {biospath}")
+			os.makedirs (biospath)
+	def createbiosfolder (self,con):
+		cursor = con.execute ("SELECT name,description FROM games Where isbios = 1")
+		for b in cursor:
+			print (b[0],"\t\t",b[1])
+			self.copybios (b[0])
+
+	def copybios (self,biosname):
+		""" copy a bios from romset to bios folder
+			"""
+		origin 	= check (biosname, romsetpath)
+		dest 	= check (biosname, biospath)
+		if origin[1] == False:
+			print (f"{biosname} bios is not present at romset")
+			return 
+		if dest[1] == True:
+			print (f"{biosname} bios already exist on bios folder.")
+			return
+		shutil.copyfile (origin[0], dest[0])
 
 # main
 if __name__ == '__main__':
@@ -346,18 +377,31 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
 
 	parser.add_argument("-x", "--xml", default="mame.xml",
-						help="xml file path")
+						help="xml file path. xml romset file.")
+	parser.add_argument("-s", "--romset", default="romset",
+						help="romset folder path. Contains all mame romset.")
+	parser.add_argument("-b", "--bios", default="bios",
+						help="bios folder path. A folder where only the bios are.")
+	parser.add_argument("-r", "--roms", default="roms",
+						help="roms folder path. Your custom rom folder.")
 
 	args = parser.parse_args()
 
 	# Retrieving variables from args
-	xmlfile = args.xml
+	xmlfile		= args.xml
+	romsetpath	= args.romset
+	biospath	= args.bios
+	romspath	= args.roms
 
 	# Checking parameters
 	errorlist 	= []
 	warninglist	= []
 	if itemcheck(xmlfile) 	!= "file":
-		errorlist.append ("I can't find the xml file:(--xml {})".format(xmlfile,))
+		errorlist.append (f"I can't find the xml file:(--xml {xmlfile})")
+
+	if itemcheck(romsetpath)	!= "folder":
+		errorlist.append (f"I can't find romset folder:(--bios {romsetpath})")
+
 
 	if len (warninglist) > 0:
 		printlist (warninglist)
@@ -366,4 +410,9 @@ if __name__ == '__main__':
 		printlist (errorlist)
 		exit()
 
-dbpath = createSQL3(xmlfile)
+	dbpath = createSQL3(xmlfile)	# Creating or loading a existent SQLite3 Database
+	con = sqlite3.connect (dbpath)	# Connection to SQL database.
+
+	# Create the bios folder
+	cursor = Bios ()
+	cursor.createbiosfolder (con)

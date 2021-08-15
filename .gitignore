@@ -1,7 +1,13 @@
+.gitignore
+
 # Test files
 deleteme
 tests
 mame.*
+romset*
+bios
+roms
+notes.ods
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
