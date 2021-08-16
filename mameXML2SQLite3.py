@@ -11,7 +11,7 @@ __doc__		= """
 	"""
 
 # Standard libray imports
-import os, argparse, sqlite3, re, shutil
+import os, argparse, sqlite3, re, shutil, zipfile
 
 #=====================================
 # Custom Error Classes
@@ -376,10 +376,9 @@ class Rom:
 		Methods: 
 			copyrom: 	copy this game from romsetfolder to roms folder, 
 						also dependant roms if it is a clone and needed bios.
-	
-		TODO: check rom.zip content to alert on roms and devices.
 		"""
 	def __init__(self,con,romname):
+		self.con = con
 		if itemcheck(romspath) != "folder":
 			print (f"creating roms folder at: {romspath}")
 			os.makedirs (romspath)
@@ -389,37 +388,108 @@ class Rom:
 			self.name = None
 		else:
 			self.name, self.cloneof, self.romof, self.isbios = romheads
+			self.origin	= check (romname, romsetpath)
+			self.dest 	= check (romname, romspath)
+
 
 	def copyrom (self):
 		""" copy a romgame-pack from the romset folder to the roms folder
 			a romgamepack is formed with rom/clone origin rom, and bios. 
-			todo: list zip files and fix missing roms and devices
+			TODO: list zip files and fix missing roms and devices.
 			"""
 		success = True
 		if self.name != None:
-			success = success * self.__copyfile__ (self.name)
+			success *= self.__copyfile__(self.name)
 			if self.romof != None:
-				success = success * Rom (con, self.romof).copyrom()
+				success *= Rom (con, self.romof).copyrom()
 			if self.isbios:
 				Bios (con).copybios(self.name)
-			elif not success:
+			if success:
+				success *= self.__adddevs__(self.name)
+			if not success:
 				print ("Something Was wrong, some files were not present.")
-			return success
+			return bool (success)
 		return False
 
 	def __copyfile__ (self,romname):
 		""" copy a romfile to roms folder
 			"""
-		origin 	= check (romname, romsetpath)
-		dest 	= check (romname, romspath)
-		if origin[1] == False:
+		if self.origin[1] == False:
 			print (f"{romname} file is not present at romset")
 			return False
-		if dest[1] == True:
+		if self.dest[1] == True:
 			print (f"{romname} file already exist on roms folder.")
 			return True
-		shutil.copyfile (origin[0], dest[0])
+		shutil.copyfile (self.origin[0], self.dest[0])
 		return True
+
+	def __adddevs__ (self,romname):
+		"""Adds required devs files to the zipped rom at your cursom rom folder
+			"""
+		gamedevset 	= self.devset (romname)
+		for device in gamedevset:
+			return self.__mergerom__(romname,device)
+		return True
+	
+	def __mergerom__ (self, merged, source):
+		""" Merge 2 roms. gets zip files from origin rom and put them into dest rom file.
+			dest is a rom placed at your custom roms folder
+			origin is a rom placed at your romset folder 
+			"""
+		zipfileset	= self.__filezipromset__ (self.dest[0])
+		if zipfileset == False:
+			# Zip file doesn't exist
+			return False
+		devromset 	= self.romset (source)
+		if devromset in zipfileset:
+			print ("files are already in the zip file")
+			return True
+		tomerge = devromset.difference(zipfileset)
+		sourcepath = check (source, romsetpath)
+		if not sourcepath [1]:
+			return False
+		sourcepath = sourcepath[0]
+		sourcezip = zipfile.ZipFile(sourcepath, mode='r')
+		mergezip  = zipfile.ZipFile(self.dest[0], mode='a')
+		if len (tomerge) > 0:
+			for i in tomerge:
+				sourcezip.extract (i, path='tmp')
+				mergezip.write(os.path.join('tmp',i),i)
+				print (f"Added {i} device file to rom.")
+			sourcezip.close()
+			mergezip.close()
+			shutil.rmtree('tmp')
+		return True
+
+	
+	def romset (self, romname):
+		""" Returns a roms set object from the Database Set of roms
+			"""
+		if self.name != None:
+			data = self.con.execute (f"SELECT rom_name FROM roms WHERE name = '{romname}'").fetchone()
+			if data != None:
+				return set (data)
+		return set ()
+	
+	def devset (self, romname):
+		""" Returns a dev set objetc from the Database Set of roms
+			"""
+		if self.name != None:
+			devices = self.con.execute (f"SELECT dev_name FROM devs WHERE name = '{romname}'").fetchone()
+			if devices != None:
+				return set (devices)
+		return set()
+	
+	def __filezipromset__ (self, filezip):
+		""" Returns a set of files contained into the zip file
+			"""
+		if itemcheck (filezip) != 'file':
+			return False
+		a = zipfile.ZipFile(filezip, mode='r').namelist()
+		if a != None:
+			return set (a)
+		return set ()
+
 
 if __name__ == '__main__':
 	########################################
@@ -468,4 +538,4 @@ if __name__ == '__main__':
 	# Bios(con).createbiosfolder()
 
 	# Copy a rom from romset to rom folder
-	Rom (con, "sf2").copyrom()
+	Rom (con, "wof").copyrom()
