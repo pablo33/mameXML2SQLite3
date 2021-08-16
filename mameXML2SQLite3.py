@@ -6,6 +6,8 @@ __author__  = "pablo33"
 __doc__		= """
 	This software parses a MAME XML file into SQLite3 Database.
 	Not all information are parsed. Testing on Romset 1.49
+	Copies gamesets from a romset, including bios.
+	Copies needed or all bios on a spare bios folder.
 	"""
 
 # Standard libray imports
@@ -369,7 +371,6 @@ class Bios:
 			return
 		shutil.copyfile (origin[0], dest[0])
 
-
 class Rom:
 	""" Represents a game,
 		Methods: 
@@ -382,21 +383,29 @@ class Rom:
 		if itemcheck(romspath) != "folder":
 			print (f"creating roms folder at: {romspath}")
 			os.makedirs (romspath)
-		self.name, self.cloneof, self.romof, self.isbios = con.execute (f'SELECT name,cloneof,romof, isbios FROM games WHERE name = "{romname}"').fetchone()
+		romheads = con.execute (f'SELECT name,cloneof,romof, isbios FROM games WHERE name = "{romname}"').fetchone()
+		if romheads == None:
+			print (f'Thereis no rom-game called {romname}')
+			self.name = None
+		else:
+			self.name, self.cloneof, self.romof, self.isbios = romheads
 
 	def copyrom (self):
 		""" copy a romgame-pack from the romset folder to the roms folder
 			a romgamepack is formed with rom/clone origin rom, and bios. 
 			todo: list zip files and fix missing roms and devices
 			"""
-		success = self.__copyfile__ (self.name)
-		if self.romof != None:
-			Rom (con, self.romof).copyrom()
-		if self.isbios:
-			Bios (con).copybios(self.name)
-		elif not success:
-			print ("Something Was wrong, some files were not present.")
-		return success
+		success = True
+		if self.name != None:
+			success = success * self.__copyfile__ (self.name)
+			if self.romof != None:
+				success = success * Rom (con, self.romof).copyrom()
+			if self.isbios:
+				Bios (con).copybios(self.name)
+			elif not success:
+				print ("Something Was wrong, some files were not present.")
+			return success
+		return False
 
 	def __copyfile__ (self,romname):
 		""" copy a romfile to roms folder
@@ -411,7 +420,6 @@ class Rom:
 			return True
 		shutil.copyfile (origin[0], dest[0])
 		return True
-
 
 if __name__ == '__main__':
 	########################################
