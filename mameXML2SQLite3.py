@@ -580,10 +580,13 @@ class Romset:
 					if line == 1:
 						writer.writeheader()
 						continue
-					#datadict = dict (zip(self.headerlist,r.split('\t')))
 					datadict = r
-					if datadict['action'].lower() in ('add', 'remove'):
+					postkey = None
+					if datadict ['action'].lower() in ('add','remove'):
 						postkey = self.__dofileaction__ (datadict['action'].lower(), datadict['name'])
+					elif datadict ['action'] not in ('added','removed','error','unknown action',''):
+						postkey = 'unknown action'
+					if postkey:
 						print (f"{datadict['name']}: {postkey}")
 						datadict ['action'] = postkey
 					writer.writerow (rowdict=datadict)
@@ -653,7 +656,10 @@ if __name__ == '__main__':
 
 	# UseCase: Copy a rom from romset to rom folder include Bios and fix missing devices
 	# Rom (con, "wof").copyrom()
+	# Rom (con, "wof").removerom()
 
 	# UseCase: Generate a list of games in CSV (tab-separated)
 	# Romset (con).games2csv()
 	Romset (con).processCSVlist()
+
+	# User interface:
