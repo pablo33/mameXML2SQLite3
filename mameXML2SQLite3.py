@@ -509,7 +509,7 @@ class Romset:
 		self.myCSVfile = "gamelist.csv"
 		# For CSV generation and read
 		self.addedcolumns = ['action']
-		retrievefields = [	'name',
+		self.retrievefields = [	'name',
 							'description',
 							'cloneof',
 							'year',
@@ -518,13 +518,14 @@ class Romset:
 							'display_rotate',
 							'driver_savestate',
 							]
-		self.headerlist = self.addedcolumns + retrievefields
+		if Bestgames(self.con,bgfile).checkfield():
+			self.retrievefields += ['score']
+		self.headerlist = self.addedcolumns + self.retrievefields
 
 	def games2csv(self):
 		""" Generates a CSV file with the gamelist based on filters.
 			By default, without bios, or clones.
 			Filename: gamelist.csv
-			This 
 			"""
 		if itemcheck (self.myCSVfile) == 'file':
 			print (f"There is already a game list: ({self.myCSVfile}).")
@@ -533,7 +534,7 @@ class Romset:
 				print ("Proccess cancelled.")
 				return
 		#datadict = dict (list(zip(headerlist,['']*len(headerlist))))
-		retrievefields_comma = ','.join(retrievefields)	# for SQL Search
+		retrievefields_comma = ','.join(self.retrievefields)	# for SQL Search
 		cursor = self.con.execute (f'SELECT {retrievefields_comma} FROM games \
 						WHERE (\
 								isbios is False \
@@ -565,9 +566,11 @@ class Romset:
 		if itemcheck (self.myCSVfile) != 'file':
 			print (f"There is no game list: ({self.myCSVfile}).")
 			r = input ("do you want to generate one? (y/n)")
-			if r.lower() not in ('y','yes'):
+			if r.lower() in ('y','yes'):
 				self.games2csv()
+			else:
 				return
+
 		# process CSV
 		csvtmpfile = self.myCSVfile + '.tmp'
 		with open (csvtmpfile, 'w', newline='') as tmp:
@@ -592,6 +595,7 @@ class Romset:
 					writer.writerow (rowdict=datadict)
 		os.remove (self.myCSVfile)
 		shutil.move	(csvtmpfile, self.myCSVfile)
+		print ("Done!")
 
 	def __dofileaction__ (self, action, romname):
 		if action == 'add':
@@ -606,7 +610,74 @@ class Romset:
 			return 'error'
 		return 
 
-
+class Bestgames:
+	""" Best games list by progetto, adds a score to the roms.
+		current functions:
+		Adds registry to database.
+		Checks if there is a score field at database. 
+		"""	
+	def __init__(self, con, bgfile):
+		self.scorefield = 'score'
+		self.con = con
+		self.bgfile = bgfile
+		self.isINdatabase = self.checkfield()
+	
+	def checkfield (self):
+		""" Checks if score field is at database.
+			Returns True in case of found it.
+			"""
+		cursor = self.con.execute ("PRAGMA table_info(games)")
+		for i in cursor:
+			if i[1] == self.scorefield:
+				return True
+		return False
+	
+	def addscores (self):
+		if not self.isINdatabase:
+			# Adding score field to table
+			self.con.execute (f"ALTER TABLE games ADD {self.scorefield} char")
+			self.con.commit()
+			self.isINdatabase = True
+		#Reading and updating data:
+		pscorelist = [
+				"[0 to 10 (Worst)]",
+				"[10 to 20 (Horrible)]",
+				"[20 to 30 (Bad)]",
+				"[30 to 40 (Amendable)]",
+				"[40 to 50 (Decent)]",
+				"[50 to 60 (Not Good Enough)]",
+				"[60 to 70 (Passable)]",
+				"[70 to 80 (Good)]",
+				"[80 to 90 (Very Good)]",
+				"[90 to 100 (Best Games)]",
+				]
+		pscorelist.reverse()
+		# processing bestgames.ini file.
+		with open (self.bgfile, "r") as inifile:
+			value = pscorelist.pop()
+			next = pscorelist[-1]
+			readable = False
+			commitcounter = 0
+			commitevery = 1000
+			for line in inifile:
+				i = line[:-1]
+				if i == value:
+					readable = True
+					continue
+				if i == next:
+					value = pscorelist.pop()
+					if len (pscorelist)>0:
+						next = pscorelist[-1]
+					continue
+				if readable and i != "":
+					self.con.execute (f"UPDATE games SET {self.scorefield} = '{value}' WHERE name = '{i}'")
+					commitcounter += 1
+					if commitcounter % commitevery == 0:
+						self.con.commit ()
+			self.con.commit()
+		print (f"Database updated with {self.bgfile}")
+		
+		
 
 if __name__ == '__main__':
 	########################################
@@ -622,6 +693,9 @@ if __name__ == '__main__':
 						help="bios folder path. A folder where only the bios are.")
 	parser.add_argument("-r", "--roms", default="roms",
 						help="roms folder path. Your custom rom folder.")
+	parser.add_argument("-bg", "--bestgames", default="bestgames.ini",
+						help="bestgames ini file by progetto.")
+	
 
 	args = parser.parse_args()
 
@@ -630,6 +704,7 @@ if __name__ == '__main__':
 	romsetpath	= args.romset
 	biospath	= args.bios
 	romspath	= args.roms
+	bgfile		= args.bestgames
 
 	# Checking parameters
 	errorlist 	= []
@@ -640,6 +715,8 @@ if __name__ == '__main__':
 	if itemcheck(romsetpath)	!= "folder":
 		errorlist.append (f"I can't find romset folder:(--bios {romsetpath})")
 
+	if itemcheck (bgfile) != "file":
+		warninglist.append (f"I can't find bestgames file:(--bestgames {bgfile})")
 
 	if len (warninglist) > 0:
 		printlist (warninglist)
@@ -660,6 +737,11 @@ if __name__ == '__main__':
 
 	# UseCase: Generate a list of games in CSV (tab-separated)
 	# Romset (con).games2csv()
-	Romset (con).processCSVlist()
+	# Romset (con).processCSVlist()
 
-	# User interface:
+	# bestgames.ini to database from progettoSNAPS.net
+	# Bestgames (con, bgfile).addscores()
+
+
+	#  User interface:
+
