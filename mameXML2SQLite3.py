@@ -344,6 +344,7 @@ def check (file, path):
 	fullfilepath = os.path.join(path,file + romsext) 
 	if itemcheck (fullfilepath) == 'file':
 		return (fullfilepath, True)
+	print (f"No se encuentra el fichero {file} en {path}")
 	return (fullfilepath, False)
 
 class Bios:
@@ -385,12 +386,22 @@ class Rom:
 		romheads = con.execute (f'SELECT name,cloneof,romof, isbios FROM games WHERE name = "{romname}"').fetchone()
 		if romheads == None:
 			print (f'Thereis no rom-game called {romname}')
-			self.name = None
+			self.name 	= None
+			self.origin = (None, None)
+			self.dest 	= (None, None)
 		else:
 			self.name, self.cloneof, self.romof, self.isbios = romheads
 			self.origin	= check (romname, romsetpath)
 			self.dest 	= check (romname, romspath)
 
+	def removerom (self):
+		""" removes a rom file from the custom rom folder
+			"""
+		success = True
+		if self.name != None and self.dest[1]:
+			os.remove (self.dest[0])
+			return success
+		return False
 
 	def copyrom (self):
 		""" copy a romgame-pack from the romset folder to the roms folder
@@ -496,20 +507,8 @@ class Romset:
 			"""
 		self.con = con	# connection to SQLite3 Database
 		self.myCSVfile = "gamelist.csv"
-		pass
-
-	def games2csv(self):
-		""" Generates a CSV file with the gamelist based on filters.
-			By default, without bios, or clones.
-			Filename: gamelist.csv
-			This 
-			"""
-		if itemcheck (self.myCSVfile) == 'file':
-			print (f"There is already a game list: ({self.myCSVfile}), Do you want to delte")
-			r = input ("I will replace it, do you want to continue? (y/n)")
-			if r.lower() not in ('y','yes'):
-				print ("proccess cancelled.")
-				return
+		# For CSV generation and read
+		self.addedcolumns = ['action']
 		retrievefields = [	'name',
 							'description',
 							'cloneof',
@@ -519,13 +518,25 @@ class Romset:
 							'display_rotate',
 							'driver_savestate',
 							]
-		retrievefields_comma = ','.join(retrievefields)	# for SQL Search
-		addedcolumns = ['action']
-		headerlist = addedcolumns + retrievefields
+		self.headerlist = self.addedcolumns + retrievefields
+
+	def games2csv(self):
+		""" Generates a CSV file with the gamelist based on filters.
+			By default, without bios, or clones.
+			Filename: gamelist.csv
+			This 
+			"""
+		if itemcheck (self.myCSVfile) == 'file':
+			print (f"There is already a game list: ({self.myCSVfile}).")
+			r = input ("I will replace it, do you want to continue? (y/n)")
+			if r.lower() not in ('y','yes'):
+				print ("Proccess cancelled.")
+				return
 		#datadict = dict (list(zip(headerlist,['']*len(headerlist))))
+		retrievefields_comma = ','.join(retrievefields)	# for SQL Search
 		cursor = self.con.execute (f'SELECT {retrievefields_comma} FROM games \
 						WHERE (\
-							isbios is False \
+								isbios is False \
 							AND isdevice is False \
 							AND ismechanical is False \
 							AND isdevice is False \
@@ -537,13 +548,62 @@ class Romset:
 							)')
 		with open(self.myCSVfile, 'w', newline='') as csvfile:
 			writer = csv.writer (csvfile, dialect='excel-tab')
-			writer.writerow (headerlist)
+			writer.writerow (self.headerlist)
 			for r in cursor:
 				data = [''] + list(r)
 				writer.writerow (data)
 		print ("Done.")
 		print (f"You can edit {self.myCSVfile} file with a spreadsheet and set actions on 'action' column.")
 		print ("Available actions are: add and remove")
+
+	def processCSVlist (self):
+		""" Proccess CSV file with the gamelist and searchs and execute actions.
+			actions are stored as text on 'action' column, and for now current actions are:
+				add		: to add a game from the romset to the custom rom folder
+				delete	: to delete a game-rom from the custom rom folder.
+			"""
+		if itemcheck (self.myCSVfile) != 'file':
+			print (f"There is no game list: ({self.myCSVfile}).")
+			r = input ("do you want to generate one? (y/n)")
+			if r.lower() not in ('y','yes'):
+				self.games2csv()
+				return
+		# process CSV
+		csvtmpfile = self.myCSVfile + '.tmp'
+		with open (csvtmpfile, 'w', newline='') as tmp:
+			writer = csv.DictWriter(tmp, self.headerlist, dialect='excel-tab')	# Outtput file
+			line = 0
+			with open (self.myCSVfile, 'r', newline='') as csvfile:
+				reader = csv.DictReader (csvfile, dialect='excel-tab')
+				for r in reader:
+					line += 1
+					if line == 1:
+						writer.writeheader()
+						continue
+					#datadict = dict (zip(self.headerlist,r.split('\t')))
+					datadict = r
+					if datadict['action'].lower() in ('add', 'remove'):
+						postkey = self.__dofileaction__ (datadict['action'].lower(), datadict['name'])
+						print (f"{datadict['name']}: {postkey}")
+						datadict ['action'] = postkey
+					writer.writerow (rowdict=datadict)
+		os.remove (self.myCSVfile)
+		shutil.move	(csvtmpfile, self.myCSVfile)
+
+	def __dofileaction__ (self, action, romname):
+		if action == 'add':
+			success = Rom (self.con, romname).copyrom()
+			if success:
+				return 'added'
+			return 'error'
+		if action == 'remove':
+			success = Rom (self.con, romname).removerom()
+			if success:
+				return 'deleted'
+			return 'error'
+		return 
+
+
 
 if __name__ == '__main__':
 	########################################
@@ -595,4 +655,5 @@ if __name__ == '__main__':
 	# Rom (con, "wof").copyrom()
 
 	# UseCase: Generate a list of games in CSV (tab-separated)
-	Romset (con).games2csv()
+	# Romset (con).games2csv()
+	Romset (con).processCSVlist()
