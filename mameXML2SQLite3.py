@@ -11,7 +11,7 @@ __doc__		= """
 	"""
 
 # Standard libray imports
-import os, argparse, sqlite3, re, shutil, zipfile
+import os, argparse, sqlite3, re, shutil, zipfile, csv
 
 #=====================================
 # Custom Error Classes
@@ -490,6 +490,60 @@ class Rom:
 			return set (a)
 		return set ()
 
+class Romset:
+	def __init__ (self, con):
+		""" Represents the romset at the database
+			"""
+		self.con = con	# connection to SQLite3 Database
+		self.myCSVfile = "gamelist.csv"
+		pass
+
+	def games2csv(self):
+		""" Generates a CSV file with the gamelist based on filters.
+			By default, without bios, or clones.
+			Filename: gamelist.csv
+			This 
+			"""
+		if itemcheck (self.myCSVfile) == 'file':
+			print (f"There is already a game list: ({self.myCSVfile}), Do you want to delte")
+			r = input ("I will replace it, do you want to continue? (y/n)")
+			if r.lower() not in ('y','yes'):
+				print ("proccess cancelled.")
+				return
+		retrievefields = [	'name',
+							'description',
+							'cloneof',
+							'year',
+							'manufacturer',
+							'display_type',
+							'display_rotate',
+							'driver_savestate',
+							]
+		retrievefields_comma = ','.join(retrievefields)	# for SQL Search
+		addedcolumns = ['action']
+		headerlist = addedcolumns + retrievefields
+		#datadict = dict (list(zip(headerlist,['']*len(headerlist))))
+		cursor = self.con.execute (f'SELECT {retrievefields_comma} FROM games \
+						WHERE (\
+							isbios is False \
+							AND isdevice is False \
+							AND ismechanical is False \
+							AND isdevice is False \
+							AND driver_status = "good" \
+							AND driver_emulation = "good" \
+							AND driver_color = "good" \
+							AND driver_sound = "good" \
+							AND driver_graphic = "good"\
+							)')
+		with open(self.myCSVfile, 'w', newline='') as csvfile:
+			writer = csv.writer (csvfile, dialect='excel-tab')
+			writer.writerow (headerlist)
+			for r in cursor:
+				data = [''] + list(r)
+				writer.writerow (data)
+		print ("Done.")
+		print (f"You can edit {self.myCSVfile} file with a spreadsheet and set actions on 'action' column.")
+		print ("Available actions are: add and remove")
 
 if __name__ == '__main__':
 	########################################
@@ -534,8 +588,11 @@ if __name__ == '__main__':
 	dbpath = createSQL3(xmlfile)	# Creating or loading a existent SQLite3 Database
 	con = sqlite3.connect (dbpath)	# Connection to SQL database.
 
-	# Create the bios folder with a copy of all bios
+	# UseCase: Create the bios folder with a copy of all bios
 	# Bios(con).createbiosfolder()
 
-	# Copy a rom from romset to rom folder
-	Rom (con, "wof").copyrom()
+	# UseCase: Copy a rom from romset to rom folder include Bios and fix missing devices
+	# Rom (con, "wof").copyrom()
+
+	# UseCase: Generate a list of games in CSV (tab-separated)
+	Romset (con).games2csv()

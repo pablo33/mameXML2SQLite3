@@ -8,6 +8,8 @@ romset*
 bios
 roms
 notes.ods
+gamelist.csv
+stuff
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
