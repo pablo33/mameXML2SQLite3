@@ -1,14 +1,21 @@
 #!/usr/bin/python3
 # -*- encoding: utf-8 -*-
 
-__version__ = "0.2"
+__version__ = "0.3"
 __author__  = "pablo33"
 __doc__		= """
 	This software parses a MAME XML file into SQLite3 Database.
 	Not all information are parsed. Testing on Romset 1.49
 	Copies gamesets from a romset, including bios.
 	Copies needed or all bios on a spare bios folder.
-	"""
+	Adds a score field based on progetto besgames.ini file.
+	Can create a CSV file with information with roms and actions.
+	Process CSV file and do actions like add games to your custom rom folder or remove games.
+	
+	Works on a splitted romset.
+	generate your mame xml file with the mame version of your romset, 
+	or download XML file from the web
+"""
 
 # Standard libray imports
 import os, argparse, sqlite3, re, shutil, zipfile, csv
@@ -28,7 +35,6 @@ class ValueNotExpected(ValueError):
 #=====================================
 # Defaults
 #=====================================
-rebuildDB 	= False
 romsext		= '.zip'
 
 #=====================================
@@ -133,12 +139,27 @@ def createSQL3 (xmlfile):
 	# for device Table, define which tags contains attributes to fetch
 	dtTagg = ("device_ref",)
 
-	devsfields = {
-			"name": None,
-		}
-	devsfields_type = {
-			"name": 			("dev_name"			,"char", "NOT NULL"),
-		}	
+	devsfields = 		{"name": None,}
+	devsfields_type = 	{"name":	("dev_name", "char", "NOT NULL"),}	
+
+	# for disks Table, define which tags contains attributes to fetch
+	ktTagg = ("disk",)
+	
+	diskfields = 		{
+						"name": None,
+						"sha1": None,
+						"region": None,
+						"index" : None,
+						"writable": None,
+						}
+	diskfields_type = 	{
+						"name":		("dsk_name", "char", "NOT NULL"),
+						"sha1": 	("dsk_sha1", "char", ""),
+						"region":	("dsk_region", "char", ""),
+						"index":	("dsk_index", "char", ""),
+						"writable":	("dsk_writable", "char", ""),
+						}	
+
 
 	class Readxmlline:
 		def __t2dtags__ (self, txt):
@@ -196,8 +217,11 @@ def createSQL3 (xmlfile):
 			self.gf 	= gamefields.copy ()
 			self.__rf__ = romsfields.copy ()
 			self.__df__ = devsfields.copy ()
+			self.__kf__ = diskfields.copy ()
 			self.rflist = []
 			self.dflist = []
+			self.kflist = []
+			
 		def __datatypeparser__ (self):
 			""" Parses internal string retrieved data into its correct type
 				"""
@@ -267,6 +291,13 @@ def createSQL3 (xmlfile):
 					if i in data[1]:
 						self.__df__[i] = data[1].get(i)
 				self.dflist.append ((self.gf['name'], self.__df__.copy() ))
+			# adding dskTable with attributes taggs
+			if data[0] in ktTagg and data[1]!=None:
+				# reading attr from input dict
+				for i in diskfields:
+					if i in data[1]:
+						self.__kf__[i] = data[1].get(i)
+				self.kflist.append ((self.gf['name'], self.__kf__.copy() ))
 		def write2db (self):
 			""" Write data to Database
 				"""
@@ -290,19 +321,26 @@ def createSQL3 (xmlfile):
 				values.append (r[0]) # append key field with game name to the list
 				questions = ",".join("?"*len(r[1])) + ",?"
 				con.execute(f"INSERT INTO devs ({fields}) VALUES ({questions})", values)
+			# disk table
+			for r in self.kflist:
+				fields = ",".join([diskfields_type[i][0] for i in r[1]]) + ",name"
+				values = [i for i in r[1].values()]
+				values.append (r[0]) # append key field with game name to the list
+				questions = ",".join("?"*len(r[1])) + ",?"
+				con.execute(f"INSERT INTO disk ({fields}) VALUES ({questions})", values)
 
-	########################################
 	# Checking and initializing the Database
 	########################################
 	dbpath = os.path.splitext(xmlfile)[0] + ".sqlite3"
 
 	if itemcheck (dbpath) == 'file':
-		if not rebuildDB:
-			print ("Database Found, loading it")
-			return (dbpath)
-		else:
-			os.remove (dbpath)
-			print ("Generating a new SQLite database. Be patient.")
+		print ("Database Found, loading it")
+		return (dbpath)
+	elif itemcheck (xmlfile) != 'file':
+		print ("I can't find xml or associated database. Can't continue")
+		exit()
+	else:
+		print ("Generating a new SQLite database. Be patient.")
 
 	con = sqlite3.connect (dbpath) # it creates one if file doesn't exists
 	cursor = con.cursor() # object to manage queries
@@ -315,6 +353,9 @@ def createSQL3 (xmlfile):
 	# devs table
 	tablefields = "name, " + ",".join( [i[0]+" "+i[1]+" "+i[2] for i in devsfields_type.values()]) 
 	cursor.execute (f'CREATE TABLE devs ({tablefields})')
+	# disk table
+	tablefields = "name, " + ",".join( [i[0]+" "+i[1]+" "+i[2] for i in diskfields_type.values()]) 
+	cursor.execute (f'CREATE TABLE disk ({tablefields})')
 	con.commit()
 
 	fh = open(xmlfile)
@@ -344,7 +385,6 @@ def check (file, path):
 	fullfilepath = os.path.join(path,file + romsext) 
 	if itemcheck (fullfilepath) == 'file':
 		return (fullfilepath, True)
-	print (f"No se encuentra el fichero {file} en {path}")
 	return (fullfilepath, False)
 
 class Bios:
@@ -512,11 +552,16 @@ class Romset:
 		self.retrievefields = [	'name',
 							'description',
 							'cloneof',
+							'chd',
 							'year',
 							'manufacturer',
 							'display_type',
 							'display_rotate',
 							'driver_savestate',
+							'driver_emulation',
+							'driver_color',
+							'driver_sound',
+							'driver_graphic',
 							]
 		if Bestgames(self.con,bgfile).checkfield():
 			self.retrievefields += ['score']
@@ -535,18 +580,15 @@ class Romset:
 				return
 		#datadict = dict (list(zip(headerlist,['']*len(headerlist))))
 		retrievefields_comma = ','.join(self.retrievefields)	# for SQL Search
-		cursor = self.con.execute (f'SELECT {retrievefields_comma} FROM games \
-						WHERE (\
-								isbios is False \
-							AND isdevice is False \
-							AND ismechanical is False \
-							AND isdevice is False \
-							AND driver_status = "good" \
-							AND driver_emulation = "good" \
-							AND driver_color = "good" \
-							AND driver_sound = "good" \
-							AND driver_graphic = "good"\
-							)')
+		cursor = self.con.execute (f'SELECT {retrievefields_comma} FROM \
+						games LEFT JOIN \
+		(SELECT name as dk_name, "yes" as chd from disk GROUP BY name) \
+						ON games.name = dk_name \
+							WHERE (		isbios is False \
+									AND isdevice is False  \
+									AND ismechanical is False \
+									)'
+								)
 		with open(self.myCSVfile, 'w', newline='') as csvfile:
 			writer = csv.writer (csvfile, dialect='excel-tab')
 			writer.writerow (self.headerlist)
@@ -612,6 +654,7 @@ class Romset:
 
 class Bestgames:
 	""" Best games list by progetto, adds a score to the roms.
+		https://www.progettosnaps.net/bestgames/
 		current functions:
 		Adds registry to database.
 		Checks if there is a score field at database. 
@@ -695,6 +738,8 @@ if __name__ == '__main__':
 						help="roms folder path. Your custom rom folder.")
 	parser.add_argument("-bg", "--bestgames", default="bestgames.ini",
 						help="bestgames ini file by progetto.")
+	parser.add_argument("-bps", "--bypass",
+						help="bypass xml file and load associated SQLite3 Database.")
 	
 
 	args = parser.parse_args()
@@ -705,18 +750,19 @@ if __name__ == '__main__':
 	biospath	= args.bios
 	romspath	= args.roms
 	bgfile		= args.bestgames
+	bypass		= args.bypass
 
 	# Checking parameters
 	errorlist 	= []
 	warninglist	= []
-	if itemcheck(xmlfile) 	!= "file":
-		errorlist.append (f"I can't find the xml file:(--xml {xmlfile})")
-
 	if itemcheck(romsetpath)	!= "folder":
 		errorlist.append (f"I can't find romset folder:(--bios {romsetpath})")
 
 	if itemcheck (bgfile) != "file":
 		warninglist.append (f"I can't find bestgames file:(--bestgames {bgfile})")
+
+	if itemcheck(xmlfile) 	!= "file" and bypass== None:
+		warninglist.append (f"I can't find the xml file:(--xml {xmlfile})")
 
 	if len (warninglist) > 0:
 		printlist (warninglist)
@@ -725,9 +771,12 @@ if __name__ == '__main__':
 		printlist (errorlist)
 		exit()
 
-	dbpath = createSQL3(xmlfile)	# Creating or loading a existent SQLite3 Database
-	con = sqlite3.connect (dbpath)	# Connection to SQL database.
-
+	dbpath = createSQL3(xmlfile)	# Creating or load an existent SQLite3 Database
+	if dbpath:
+		con = sqlite3.connect (dbpath)	# Connection to SQL database.
+	else:
+		print ("Can't find a database, please specify one with --xml argument or use --bypass argument to work on an existent database.\n")
+		exit()
 	# UseCase: Create the bios folder with a copy of all bios
 	# Bios(con).createbiosfolder()
 
@@ -742,6 +791,39 @@ if __name__ == '__main__':
 	# bestgames.ini to database from progettoSNAPS.net
 	# Bestgames (con, bgfile).addscores()
 
-
 	#  User interface:
-
+	action = True
+	while action != "0":
+		user_options = {
+			"1": "Create a bios folder with all bios roms",
+			"2": "Search and copy a rom from Romset to Roms Folder",
+			"3": "Search and remove a rom from the Roms Folder",
+			"4": "Generate a games-list in CSV format (gamelist.csv)",
+			"5": "Proccess actions in games-list CSV file (gamelist.csv)",
+			"6": "Add bestgames,ini information to database",
+			"0": "Exit"
+			}
+		for o in user_options:
+			print (f"{o} - {user_options[o]}")
+		action = input ("choose an option >")
+		if action == "1":
+			Bios(con).createbiosfolder()
+		elif action == "2":
+			# TODO: search a rom to copy
+			Rom (con, "wof").copyrom()
+		elif action == "3":
+			# TODO: search a rom to remove
+			Rom (con, "wof").removerom()
+		elif action == "4":
+			Romset (con).games2csv()
+		elif action == "5":
+			Romset (con).processCSVlist()
+		elif action == "6":
+			Bestgames (con, bgfile).addscores()
+		elif action == "0":
+			print ("Done!")
+			exit ()
+		else:
+			print ("\n"*5)
+			print ("unknown action, please enter a number")
+		
