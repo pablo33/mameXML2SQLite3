@@ -327,7 +327,7 @@ def createSQL3 (xmlfile):
 				values = [i for i in r[1].values()]
 				values.append (r[0]) # append key field with game name to the list
 				questions = ",".join("?"*len(r[1])) + ",?"
-				con.execute(f"INSERT INTO disk ({fields}) VALUES ({questions})", values)
+				con.execute(f"INSERT INTO disks ({fields}) VALUES ({questions})", values)
 
 	# Checking and initializing the Database
 	########################################
@@ -355,7 +355,7 @@ def createSQL3 (xmlfile):
 	cursor.execute (f'CREATE TABLE devs ({tablefields})')
 	# disk table
 	tablefields = "name, " + ",".join( [i[0]+" "+i[1]+" "+i[2] for i in diskfields_type.values()]) 
-	cursor.execute (f'CREATE TABLE disk ({tablefields})')
+	cursor.execute (f'CREATE TABLE disks ({tablefields})')
 	con.commit()
 
 	fh = open(xmlfile)
@@ -440,6 +440,7 @@ class Rom:
 		success = True
 		if self.name != None and self.dest[1]:
 			os.remove (self.dest[0])
+			print (f'{self.name} : deleted')
 			return success
 		return False
 
@@ -477,7 +478,7 @@ class Rom:
 	def __adddevs__ (self,romname):
 		"""Adds required devs files to the zipped rom at your cursom rom folder
 			"""
-		gamedevset 	= self.devset (romname)
+		gamedevset 	= self.__fileromset__ (romname,'devs', 'dev_name')
 		for device in gamedevset:
 			return self.__mergerom__(romname,device)
 		return True
@@ -491,7 +492,7 @@ class Rom:
 		if zipfileset == False:
 			# Zip file doesn't exist
 			return False
-		devromset 	= self.romset (source)
+		devromset 	= self.__fileromset__ (source,'roms','rom_name')
 		if devromset in zipfileset:
 			print ("files are already in the zip file")
 			return True
@@ -512,24 +513,14 @@ class Rom:
 			shutil.rmtree('tmp')
 		return True
 
-	
-	def romset (self, romname):
-		""" Returns a roms set object from the Database Set of roms
+	def __fileromset__ (self, romname, table, field):
+		""" Returns a list of fileroms the Database, tables of roms, devices or disks
 			"""
 		if self.name != None:
-			data = self.con.execute (f"SELECT rom_name FROM roms WHERE name = '{romname}'").fetchone()
+			data = self.con.execute (f"SELECT {field} FROM {table} WHERE name = '{romname}'").fetchone()
 			if data != None:
 				return set (data)
 		return set ()
-	
-	def devset (self, romname):
-		""" Returns a dev set objetc from the Database Set of roms
-			"""
-		if self.name != None:
-			devices = self.con.execute (f"SELECT dev_name FROM devs WHERE name = '{romname}'").fetchone()
-			if devices != None:
-				return set (devices)
-		return set()
 	
 	def __filezipromset__ (self, filezip):
 		""" Returns a set of files contained into the zip file
@@ -651,6 +642,37 @@ class Romset:
 				return 'deleted'
 			return 'error'
 		return 
+
+	def chooserom (self):
+		""" Choose a rom name from the database iterating a list of possible candidates.
+			"""
+		candidate = True
+		options = dict ()
+		opclones = {1: ' cloneof is NULL AND ', -1 : ''}
+		opclones_st = 1
+		while True:
+			print ('commands and active filters:')
+			print ('/clones','\t', opclones[opclones_st])
+			print ('-'*30)
+			print ('Press enter to exit')
+			candidate = input ('find a rom by name: ')
+			if candidate == "":
+				return False
+			if candidate == "/clones":
+				opclones_st *= -1
+				print (opclones[opclones_st])
+			if str(candidate) in options.keys():
+				print (f'Selected: {candidate}')
+				return options[candidate]
+			cursor = self.con.execute (f"SELECT name, description FROM games WHERE {opclones[opclones_st]} description LIKE '%{candidate}%'")
+			options = dict ()
+			counter = 0
+			for i in cursor:
+				counter += 1
+				options [str(counter)] = i[0]
+				print (f'{counter} - {i[0]}\t,\t{i[1]}')
+
+		
 
 class Bestgames:
 	""" Best games list by progetto, adds a score to the roms.
@@ -810,10 +832,14 @@ if __name__ == '__main__':
 			Bios(con).createbiosfolder()
 		elif action == "2":
 			# TODO: search a rom to copy
-			Rom (con, "wof").copyrom()
+			romname = Romset(con).chooserom ()
+			if romname:
+				Rom (con, romname).copyrom()
 		elif action == "3":
 			# TODO: search a rom to remove
-			Rom (con, "wof").removerom()
+			romname = Romset(con).chooserom ()
+			if romname:
+				Rom (con, romname).removerom()
 		elif action == "4":
 			Romset (con).games2csv()
 		elif action == "5":
