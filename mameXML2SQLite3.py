@@ -634,10 +634,10 @@ class Rom:
 			elif r in romlistzip:
 				extracted = a.extract(r,tmp)
 				self.__checkSHA1__(extracted, 'roms', 'rom_name', 'rom_sha1')
-				checked.append (r)
 				os.remove(os.path.join(tmp,r))
 			else:
 				print (f'{self.name}\tRom not present: {r}')
+			checked.append (r)
 		return checked
 
 
