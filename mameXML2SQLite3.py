@@ -19,6 +19,7 @@ __doc__		= """
 
 # Standard libray imports
 import os, argparse, sqlite3, re, shutil, zipfile, csv
+from hashlib import sha1
 
 #=====================================
 # Custom Error Classes
@@ -434,7 +435,6 @@ class Rom:
 			self.origin	= check (romname, romsetpath)
 			self.dest 	= check (romname, romspath)
 			self.maingame = self.__maingame__ ()
-			print ('Maingame: ', self.maingame)
 
 	def removerom (self):
 		""" removes a rom file from the custom rom folder
@@ -487,14 +487,23 @@ class Rom:
 			return self.__mergerom__(device)
 		return True
 	
+	def __CHDsfiles__ (self):
+		""" returns a list of CHDs files of the romset
+			"""
+		gamechdset 	= self.__fileromset__ (self.name, 'disks', 'dsk_name')
+		filelist = []
+		for chd in gamechdset:
+			file = os.path.join (chdspath, self.maingame, chd) + '.chd'
+			filelist.append (file)
+		return filelist
+
+
 	def __addchds__ (self):
 		""" Adds CHDs files to your custom roms
 			"""
-		gamechdset 	= self.__fileromset__ (self.name, 'disks', 'dsk_name')
-		for chd in gamechdset:
-			# TODO: COPY ACTION
-			origin = os.path.join (chdspath, self.maingame, chd) + '.chd'
-			dest = os.path.join (romspath, self.maingame, chd) + '.chd'
+		for origin in self.__CHDsfiles__():
+			file = os.path.basename (origin)
+			dest = os.path.join (romspath, self.maingame, file)
 			chdgamedir = os.path.join (romspath, self.maingame)
 			if itemcheck (origin) != 'file':
 				print (f'CHD not found: {origin}')
@@ -563,6 +572,54 @@ class Rom:
 		if a != None:
 			return set (a)
 		return set ()
+
+	def __sha1__ (self, filepath):
+		""" Returns the sha1 digest of the file
+			"""
+		hasher = sha1()
+		with open( filepath, 'rb') as afile:
+			buf = afile.read()
+			hasher.update(buf)
+		return (hasher.hexdigest())
+
+	def __checkSHA1__ (self, file, table, romfield, hashfield):
+		""" Checks sha1 chekcum for a file and compares it with the value at the database.
+			file: 	path of your file at the harddisk
+			table:	table at SQL to retrieve the value
+			romfield: field at the SQL to match the file name
+			hashfield: field at the SQL to retrieve the sha1 value
+			"""
+		# For CHDs
+		file_name = os.path.splitext(os.path.basename(file))[0]
+		sqldigest  = self.con.execute (f"SELECT {hashfield} FROM {table} WHERE name = '{self.name}' AND {romfield} = '{file_name}'").fetchone()[0]
+		if sqldigest == None:
+			print ("I can't find sha1 value at database")
+			return True
+		if itemcheck (file) == 'file':
+			filedigest = self.__sha1__(file)
+			if filedigest == sqldigest:
+				print (f"\tsha1 OK: {file}")
+			else:
+				print (f'\tsha1 do not match: {file}, game may not work')
+
+	def __checkCHDsSHA1__ (self):
+		""" Checks CHDs files at romset
+			"""
+		# For CHDs
+		for file in self.__CHDsfiles__():
+			self.__checkSHA1__(file, 'disks', 'dsk_name', 'dsk_sha1')
+
+	def Checkrom (self):
+		""" Checks rom integrity at the romset
+			-TODO: roms
+			-TODO: devices
+			-TODO: bios
+			- CHDs
+			"""
+		if len (self.__CHDsfiles__()) > 0:
+			print ('Checking CHDs')
+			self.__checkCHDsSHA1__()
+
 
 class Romset:
 	def __init__ (self, con):
@@ -867,8 +924,10 @@ if __name__ == '__main__':
 			"4": "Generate a games-list in CSV format (gamelist.csv)",
 			"5": "Proccess actions in games-list CSV file (gamelist.csv)",
 			"6": "Add bestgames,ini information to database",
-			"0": "Exit"
+			"7": "Check files and rom integrity at the romset",
+			"0": "Exit",
 			}
+		print ('\n')
 		for o in user_options:
 			print (f"{o} - {user_options[o]}")
 		action = input ("choose an option >")
@@ -888,6 +947,10 @@ if __name__ == '__main__':
 			Romset (con).processCSVlist()
 		elif action == "6":
 			Bestgames (con, bgfile).addscores()
+		elif action == "7":
+			romname = Romset(con).chooserom ()
+			if romname:
+				Rom (con, romname).Checkrom()
 		elif action == "0":
 			print ("Done!")
 			exit ()
