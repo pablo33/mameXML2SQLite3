@@ -37,6 +37,7 @@ class ValueNotExpected(ValueError):
 # Defaults
 #=====================================
 romsext		= '.zip'
+tmp			= 'tmp'
 
 #=====================================
 # Functions
@@ -497,7 +498,6 @@ class Rom:
 			filelist.append (file)
 		return filelist
 
-
 	def __addchds__ (self):
 		""" Adds CHDs files to your custom roms
 			"""
@@ -513,8 +513,7 @@ class Rom:
 			elif itemcheck (dest) == 'file':
 				print (f'file already at CHDs folder')
 			shutil.copy (origin, dest)
-			return True
-		return False
+		return True
 
 	def __maingame__ (self):
 		rname = self.name
@@ -557,10 +556,19 @@ class Rom:
 	def __fileromset__ (self, romname, table, field):
 		""" Returns a list of fileroms the Database, tables of roms, devices or disks
 			"""
+
+		addwhere = ''
+		"""
+		if table == 'roms':
+			addwhere = "AND rom_status IS NULL"
+		"""
 		if self.name != None:
-			data = self.con.execute (f"SELECT {field} FROM {table} WHERE name = '{romname}'").fetchone()
+			data = self.con.execute (f"SELECT {field} FROM {table} WHERE name = '{romname}' {addwhere}")
 			if data != None:
-				return set (data)
+				myset = set()
+				for i in data:
+					myset.add(i[0])	
+				return myset
 		return set ()
 	
 	def __filezipromset__ (self, filezip):
@@ -589,18 +597,21 @@ class Rom:
 			romfield: field at the SQL to match the file name
 			hashfield: field at the SQL to retrieve the sha1 value
 			"""
-		# For CHDs
-		file_name = os.path.splitext(os.path.basename(file))[0]
-		sqldigest  = self.con.execute (f"SELECT {hashfield} FROM {table} WHERE name = '{self.name}' AND {romfield} = '{file_name}'").fetchone()[0]
+		file_name = os.path.basename(file)
+
+		if table == 'disks':
+			file_name = os.path.splitext(file_name)[0] # removes trail .chd
+
+		sqldigest  = self.con.execute (f"SELECT {hashfield} FROM {table} WHERE name = '{self.name}' AND {romfield} = '{file_name}'").fetchone()
 		if sqldigest == None:
-			print ("I can't find sha1 value at database")
 			return True
 		if itemcheck (file) == 'file':
+			filename = os.path.basename(file)
 			filedigest = self.__sha1__(file)
-			if filedigest == sqldigest:
-				print (f"\tsha1 OK: {file}")
+			if filedigest == sqldigest[0]:
+				print (f"{self.name}\tsha1 OK: {filename}")
 			else:
-				print (f'\tsha1 do not match: {file}, game may not work')
+				print (f'{self.name}\tsha1 do not match: {filename}, game may not work')
 
 	def __checkCHDsSHA1__ (self):
 		""" Checks CHDs files at romset
@@ -609,17 +620,45 @@ class Rom:
 		for file in self.__CHDsfiles__():
 			self.__checkSHA1__(file, 'disks', 'dsk_name', 'dsk_sha1')
 
+	def __checkROMsSHA1__ (self):
+		checked = []
+		a = zipfile.ZipFile(self.origin[0], mode='r')
+		romlistzip = self.__filezipromset__(self.origin[0])
+		romlist = self.__fileromset__(self.name,'roms','rom_name')
+		for r in romlist:
+			if r not in list(romlistzip) and self.romof is not None and r not in checked:
+				checked += Rom (self.con, self.romof).__checkROMsSHA1__()
+				continue
+			elif r in checked:
+				continue
+			elif r in romlistzip:
+				extracted = a.extract(r,tmp)
+				self.__checkSHA1__(extracted, 'roms', 'rom_name', 'rom_sha1')
+				checked.append (r)
+				os.remove(os.path.join(tmp,r))
+			else:
+				print (f'{self.name}\tRom not present: {r}')
+		return checked
+
+
 	def Checkrom (self):
 		""" Checks rom integrity at the romset
-			-TODO: roms
+			Checks for the SHA1 for the files, bios and parents games is it is a clone.
 			-TODO: devices
-			-TODO: bios
-			- CHDs
 			"""
-		if len (self.__CHDsfiles__()) > 0:
-			print ('Checking CHDs')
-			self.__checkCHDsSHA1__()
+		if self.name == None:
+			return
+		print (f"Checking files for {self.name}")
+		
+		# RomZIPfile
+		if self.origin [1]:
+			# Rom file is at the Romset folder
+			print (('Checking roms:'))
+			self.__checkROMsSHA1__()
 
+		if len (self.__CHDsfiles__()) > 0:
+			print ('Checking CHDs:')
+			self.__checkCHDsSHA1__()
 
 class Romset:
 	def __init__ (self, con):
