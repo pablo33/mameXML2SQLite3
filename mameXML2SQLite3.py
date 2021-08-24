@@ -380,7 +380,7 @@ def createSQL3 (xmlfile):
 def check (file, path):
 	""" checks if file is present,
 		Todo: check on diverse file extensions
-		Todo: also in conbnation of upper and lower case. 
+		Todo: also in conbination of upper and lower case. 
 		"""
 	fullfilepath = os.path.join(path,file + romsext) 
 	if itemcheck (fullfilepath) == 'file':
@@ -433,6 +433,8 @@ class Rom:
 			self.name, self.cloneof, self.romof, self.isbios = romheads
 			self.origin	= check (romname, romsetpath)
 			self.dest 	= check (romname, romspath)
+			self.maingame = self.__maingame__ ()
+			print ('Maingame: ', self.maingame)
 
 	def removerom (self):
 		""" removes a rom file from the custom rom folder
@@ -451,39 +453,69 @@ class Rom:
 			"""
 		success = True
 		if self.name != None:
-			success *= self.__copyfile__(self.name)
+			success *= self.__copyfile__()
 			if self.romof != None:
 				success *= Rom (con, self.romof).copyrom()
 			if self.isbios:
 				Bios (con).copybios(self.name)
 			if success:
-				success *= self.__adddevs__(self.name)
+				success *= self.__adddevs__()
+			if success:
+				success *= self.__addchds__()
 			if not success:
 				print ("Something Was wrong, some files were not present.")
 			return bool (success)
 		return False
 
-	def __copyfile__ (self,romname):
+	def __copyfile__ (self):
 		""" copy a romfile to roms folder
 			"""
 		if self.origin[1] == False:
-			print (f"{romname} file is not present at romset")
+			print (f"{self.name} file is not present at romset")
 			return False
 		if self.dest[1] == True:
-			print (f"{romname} file already exist on roms folder.")
+			print (f"{self.name} file already exist on roms folder.")
 			return True
 		shutil.copyfile (self.origin[0], self.dest[0])
 		return True
 
-	def __adddevs__ (self,romname):
+	def __adddevs__ (self):
 		"""Adds required devs files to the zipped rom at your cursom rom folder
 			"""
-		gamedevset 	= self.__fileromset__ (romname,'devs', 'dev_name')
+		gamedevset 	= self.__fileromset__ (self.name,'devs', 'dev_name')
 		for device in gamedevset:
-			return self.__mergerom__(romname,device)
+			return self.__mergerom__(device)
 		return True
 	
-	def __mergerom__ (self, merged, source):
+	def __addchds__ (self):
+		""" Adds CHDs files to your custom roms
+			"""
+		gamechdset 	= self.__fileromset__ (self.name, 'disks', 'dsk_name')
+		for chd in gamechdset:
+			# TODO: COPY ACTION
+			origin = os.path.join (chdspath, self.maingame, chd) + '.chd'
+			dest = os.path.join (romspath, self.maingame, chd) + '.chd'
+			chdgamedir = os.path.join (romspath, self.maingame)
+			if itemcheck (origin) != 'file':
+				print (f'CHD not found: {origin}')
+				return False
+			if itemcheck (chdgamedir) != 'folder':
+				os.mkdir (chdgamedir)
+			elif itemcheck (dest) == 'file':
+				print (f'file already at CHDs folder')
+			shutil.copy (origin, dest)
+			return True
+		return False
+
+	def __maingame__ (self):
+		rname = self.name
+		while True:
+			cloneof = self.con.execute (f"SELECT cloneof FROM games WHERE name = '{rname}' ").fetchone()[0]
+			if cloneof == None:
+				return rname
+			rname = cloneof
+
+	def __mergerom__ (self, source):
 		""" Merge 2 roms. gets zip files from origin rom and put them into dest rom file.
 			dest is a rom placed at your custom roms folder
 			origin is a rom placed at your romset folder 
@@ -664,7 +696,12 @@ class Romset:
 			if str(candidate) in options.keys():
 				print (f'Selected: {candidate}')
 				return options[candidate]
-			cursor = self.con.execute (f"SELECT name, description FROM games WHERE {opclones[opclones_st]} description LIKE '%{candidate}%'")
+			cursor = self.con.execute (f"SELECT name, description FROM games WHERE \
+						{opclones[opclones_st]} \
+						isdevice IS FALSE AND \
+						isbios IS FALSE AND \
+						description LIKE '%{candidate}%'"
+						)
 			options = dict ()
 			counter = 0
 			for i in cursor:
@@ -758,6 +795,8 @@ if __name__ == '__main__':
 						help="bios folder path. A folder where only the bios are.")
 	parser.add_argument("-r", "--roms", default="roms",
 						help="roms folder path. Your custom rom folder.")
+	parser.add_argument("-c", "--chds", default="chds",
+						help="chds folder path. A folder where your romset CHDs are.")
 	parser.add_argument("-bg", "--bestgames", default="bestgames.ini",
 						help="bestgames ini file by progetto.")
 	parser.add_argument("-bps", "--bypass",
@@ -773,6 +812,7 @@ if __name__ == '__main__':
 	romspath	= args.roms
 	bgfile		= args.bestgames
 	bypass		= args.bypass
+	chdspath	= args.chds
 
 	# Checking parameters
 	errorlist 	= []
@@ -785,6 +825,10 @@ if __name__ == '__main__':
 
 	if itemcheck(xmlfile) 	!= "file" and bypass== None:
 		warninglist.append (f"I can't find the xml file:(--xml {xmlfile})")
+
+	if itemcheck(chdspath) 	!= "folder":
+		warninglist.append (f"I can't find the chds folder:(--chds {chdspath})")
+		chdspath = None
 
 	if len (warninglist) > 0:
 		printlist (warninglist)
@@ -831,12 +875,10 @@ if __name__ == '__main__':
 		if action == "1":
 			Bios(con).createbiosfolder()
 		elif action == "2":
-			# TODO: search a rom to copy
 			romname = Romset(con).chooserom ()
 			if romname:
 				Rom (con, romname).copyrom()
 		elif action == "3":
-			# TODO: search a rom to remove
 			romname = Romset(con).chooserom ()
 			if romname:
 				Rom (con, romname).removerom()
