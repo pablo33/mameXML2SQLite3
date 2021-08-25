@@ -634,14 +634,9 @@ class Rom:
 	def __fileromset__ (self, romname, table, field):
 		""" Returns a list of fileroms the Database, tables of roms, devices or disks
 			"""
-
-		addwhere = ''
-		"""
-		if table == 'roms':
-			addwhere = "AND rom_status IS NULL"
-		"""
+		
 		if self.name != None:
-			data = self.con.execute (f"SELECT {field} FROM {table} WHERE name = '{romname}' {addwhere}")
+			data = self.con.execute (f"SELECT {field} FROM {table} WHERE name = '{romname}' ")
 			if data != None:
 				myset = set()
 				for i in data:
@@ -716,9 +711,19 @@ class Rom:
 				self.__checkSHA1__(extracted, 'roms', 'rom_name', 'rom_sha1')
 				os.remove(os.path.join(tmp,r))
 			else:
-				self.msg.add(r, "Rom not present at zip file", spool='error')
+				romstatus = self.__romstatus__ (r)
+				if romstatus != None:
+					self.msg.add(r, f"Rom not present at zip file: rom with {romstatus} status",)	
+				else:
+					self.msg.add(r, "Rom not present at zip file", spool='error')
 			checked.append (r)
 		return checked, self.msg
+
+	def __romstatus__ (self, rom_name):
+		""" Returns rom_status field for a rom on a romset, it is intended to discard error on this roms.
+			"""
+		status = self.con.execute (f"SELECT rom_status FROM roms WHERE name='{self.name}' AND rom_name = '{rom_name}'").fetchone()[0]
+		return status
 
 	def checkrom (self):
 		""" Checks rom integrity at the romset
