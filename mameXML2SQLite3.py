@@ -1,20 +1,22 @@
 #!/usr/bin/python3
 # -*- encoding: utf-8 -*-
 
-__version__ = "0.3"
+__version__ = "0.4"
 __author__  = "pablo33"
 __doc__		= """
-	This software parses a MAME XML file into SQLite3 Database.
-	Not all information are parsed. Testing on Romset 1.49
+	This software helps you managing a Mame Romset.
+	It also parses mame XML file and setups a SQLite3 Database.
 	Copies gamesets from a romset, including bios.
 	Copies needed or all bios on a spare bios folder.
 	Adds a score field based on progetto besgames.ini file.
 	Can create a CSV file with information with roms and actions.
 	Process CSV file and do actions like add games to your custom rom folder or remove games.
-	
+	Check roms, bios and CHDs integrity.
+
 	Works on a splitted romset.
 	generate your mame xml file with the mame version of your romset, 
-	or download XML file from the web
+	or download XML file from the web.
+
 """
 
 # Standard libray imports
@@ -59,6 +61,57 @@ def itemcheck(pointer):
 def printlist (mylist):
 	for i in mylist:
 		print (i)
+
+class Messages ():
+	""" Stores messages and produces outputt prints
+		"""
+	def __init__ (self, name, verbose = True):
+		self.name = name
+		self.Wmsg = []	# stores warning messages
+		self.Emsg = []	# stores error messages
+		self.verbose = verbose
+		self.success = True	# It turns False if any error is registered
+	
+	def add (self, item, text, spool='warning'):
+		""" Adds a message, spool can be "warning" or "error"
+			messagess are stored as a list of tuples: (item, text)
+			item refers to the object that is being affected.
+			text is the message.
+			"""
+		if spool == 'error':
+			self.Emsg.append ((item, text))
+			self.success = False
+		self.Wmsg.append ((item, text))
+		if self.verbose:
+			print (f'{self.name} : {item} : {text}')
+	
+	def Emsglist (self, notice = ''):
+		""" Output a error messages as a list 
+			"""
+		if len (self.Emsg)>0:
+			a = 10
+			print (notice)
+			print ('='*a, f' ERRORS for {self.name}','='*a)
+			for i in self.Emsg:
+				print (' : '.join([self.name, i[0], i[1]]))
+
+	def Wmsglist (self, notice = ''):
+		""" Output a warning messages as a list 
+			"""
+		if len (self.Wmsg)>0:
+			print (notice)
+			a = 10
+			print ('='*a, f' Warnings for {self.name}','='*a)
+			for i in self.Wmsg:
+				print (' : '.join([self.name, i[0], i[1]]))
+	
+	def mix (self, msg):
+		""" Mixes another msg spool object into this
+			"""
+		for i in msg.Wmsg:
+			self.add(msg.name,f"({' : '.join(list(i))})")
+		for i in msg.Emsg:
+			self.add(msg.name,f"({' : '.join(list(i))})", spool='error')
 
 def createSQL3 (xmlfile):
 	### Wich tags are retrieved from XML
@@ -393,13 +446,17 @@ class Bios:
 	def __init__(self,con):
 		# check if bios folder is present
 		self.con = con
+		self.msg = Messages ('Bios Set')
 		if itemcheck(biospath) != "folder":
 			print (f"creating bios folder at: {biospath}")
 			os.makedirs (biospath)
-	def createbiosfolder (self):
+	def copyallbios (self):
+		""" Copy all bios to the bios folder
+			"""
 		cursor = self.con.execute ("SELECT name,description FROM games WHERE isbios = 1")
 		for b in cursor:
 			self.copybios (b[0])
+		self.msg.Emsglist()
 
 	def copybios (self,biosname):
 		""" copy a bios from romset to bios folder
@@ -407,78 +464,86 @@ class Bios:
 		origin 	= check (biosname, romsetpath)
 		dest 	= check (biosname, biospath)
 		if origin[1] == False:
-			print (f"{biosname} bios is not present at romset")
-			return 
+			self.msg.add ({biosname},"bios is not present at romset",spool='error')
+			return
 		if dest[1] == True:
-			print (f"{biosname} bios already exist on bios folder.")
+			self.msg.add ({biosname},"bios already exist on bios folder",spool='error')
 			return
 		shutil.copyfile (origin[0], dest[0])
 
 class Rom:
-	""" Represents a game,
+	""" Represents a game. It must be in a .zip file
 		Methods: 
-			copyrom: 	copy this game from romsetfolder to roms folder, 
+			copyrom() 	copy this game from romsetfolder to roms folder, 
 						also dependant roms if it is a clone and needed bios.
+			removerom()	removes a rom from your custom roms folder. bios, or parent games
+						remains there.
+			checkrom()	Checks all files for the rom to work.
+
 		"""
 	def __init__(self,con,romname):
 		self.con = con
+		self.msg = Messages (romname)
 		if itemcheck(romspath) != "folder":
 			print (f"creating roms folder at: {romspath}")
 			os.makedirs (romspath)
 		romheads = con.execute (f'SELECT name,cloneof,romof, isbios FROM games WHERE name = "{romname}"').fetchone()
 		if romheads == None:
-			print (f'Thereis no rom-game called {romname}')
+			#print (f'Thereis no rom-game called {romname}')
+			self.msg.add('XML',f'Thereis no rom-game called {romname}', spool = 'error')
 			self.name 	= None
 			self.origin = (None, None)
 			self.dest 	= (None, None)
+			self.maingame, self.bios = None, None
 		else:
 			self.name, self.cloneof, self.romof, self.isbios = romheads
 			self.origin	= check (romname, romsetpath)
 			self.dest 	= check (romname, romspath)
-			self.maingame = self.__maingame__ ()
+			self.maingame, self.bios = self.__maingame__ ()
 
 	def removerom (self):
 		""" removes a rom file from the custom rom folder
 			"""
-		success = True
-		if self.name != None and self.dest[1]:
+		self.msg = Messages(self.name)
+		if self.name == None:
+			return
+		if self.dest[1]:
 			os.remove (self.dest[0])
 			print (f'{self.name} : deleted')
-			return success
-		return False
+		else:
+			self.msg.add (f'{self.name}:Rom ZIP',"File is not at your custom Rom folder")
+		return self.msg.success
 
 	def copyrom (self):
 		""" copy a romgame-pack from the romset folder to the roms folder
 			a romgamepack is formed with rom/clone origin rom, and bios. 
-			TODO: list zip files and fix missing roms and devices.
 			"""
-		success = True
+		self.msg = Messages(self.name)
 		if self.name != None:
-			success *= self.__copyfile__()
+			self.__copyfile__()
 			if self.romof != None:
-				success *= Rom (con, self.romof).copyrom()
+				msgs = Rom (con, self.romof).copyrom()
+				self.msg.mix(msgs) 
 			if self.isbios:
 				Bios (con).copybios(self.name)
-			if success:
-				success *= self.__adddevs__()
-			if success:
-				success *= self.__addchds__()
-			if not success:
-				print ("Something Was wrong, some files were not present.")
-			return bool (success)
-		return False
+			if self.msg.success:
+				self.__adddevs__()
+			if self.msg.success:
+				self.__addchds__()
+			self.msg.Emsglist(notice="Something Was wrong, some files were not present.")
+		return self.msg
 
 	def __copyfile__ (self):
 		""" copy a romfile to roms folder
 			"""
 		if self.origin[1] == False:
-			print (f"{self.name} file is not present at romset")
-			return False
+			self.msg.add('Rom at romset',f"{self.name} file is not present",spool='error')
+			return
 		if self.dest[1] == True:
-			print (f"{self.name} file already exist on roms folder.")
-			return True
+			self.msg.add('Rom at romset',f"{self.name} file already exist")
+			return
 		shutil.copyfile (self.origin[0], self.dest[0])
-		return True
+		return
 
 	def __adddevs__ (self):
 		"""Adds required devs files to the zipped rom at your cursom rom folder
@@ -506,21 +571,23 @@ class Rom:
 			dest = os.path.join (romspath, self.maingame, file)
 			chdgamedir = os.path.join (romspath, self.maingame)
 			if itemcheck (origin) != 'file':
-				print (f'CHD not found: {origin}')
+				self.msg.add('CHD',f'CHD not found: {origin}', spool='error')
 				return False
 			if itemcheck (chdgamedir) != 'folder':
 				os.mkdir (chdgamedir)
 			elif itemcheck (dest) == 'file':
-				print (f'file already at CHDs folder')
+				self.msg.add('CHD',f'file already at CHDs folder {dest}')
 			shutil.copy (origin, dest)
 		return True
 
 	def __maingame__ (self):
+		""" Returns the parent name for the game and its bios if any.
+			"""
 		rname = self.name
 		while True:
-			cloneof = self.con.execute (f"SELECT cloneof FROM games WHERE name = '{rname}' ").fetchone()[0]
+			cloneof, romof = self.con.execute (f"SELECT cloneof, romof FROM games WHERE name = '{rname}' ").fetchone()
 			if cloneof == None:
-				return rname
+				return rname, romof 
 			rname = cloneof
 
 	def __mergerom__ (self, source):
@@ -534,12 +601,13 @@ class Rom:
 			return False
 		devromset 	= self.__fileromset__ (source,'roms','rom_name')
 		if devromset in zipfileset:
-			print ("files are already in the zip file")
-			return True
+			self.msg.add (f'roms in {self.dest[0]}',"files are already in the zip file")
+			return
 		tomerge = devromset.difference(zipfileset)
 		sourcepath = check (source, romsetpath)
 		if not sourcepath [1]:
-			return False
+			self.msg.add(f'mergerom: {sourcepath[0]}', 'File is not present', spool='error')
+			return
 		sourcepath = sourcepath[0]
 		sourcezip = zipfile.ZipFile(sourcepath, mode='r')
 		mergezip  = zipfile.ZipFile(self.dest[0], mode='a')
@@ -611,7 +679,7 @@ class Rom:
 			if filedigest == sqldigest[0]:
 				print (f"{self.name}\tsha1 OK: {filename}")
 			else:
-				print (f'{self.name}\tsha1 do not match: {filename}, game may not work')
+				self.msg.add(filename, "\tsha1 do not match, game may not work", spool='error')
 
 	def __checkCHDsSHA1__ (self):
 		""" Checks CHDs files at romset
@@ -627,7 +695,9 @@ class Rom:
 		romlist = self.__fileromset__(self.name,'roms','rom_name')
 		for r in romlist:
 			if r not in list(romlistzip) and self.romof is not None and r not in checked:
-				checked += Rom (self.con, self.romof).__checkROMsSHA1__()
+				rchecked, msg = Rom (self.con, self.romof).__checkROMsSHA1__()
+				checked += rchecked	# Returns a list of already checked roms
+				self.msg.mix(msg)	# Returning messages, merging them to msg object
 				continue
 			elif r in checked:
 				continue
@@ -636,18 +706,18 @@ class Rom:
 				self.__checkSHA1__(extracted, 'roms', 'rom_name', 'rom_sha1')
 				os.remove(os.path.join(tmp,r))
 			else:
-				print (f'{self.name}\tRom not present: {r}')
+				self.msg.add(r, "Rom not present at zip file", spool='error')
 			checked.append (r)
-		return checked
+		return checked, self.msg
 
-
-	def Checkrom (self):
+	def checkrom (self):
 		""" Checks rom integrity at the romset
 			Checks for the SHA1 for the files, bios and parents games is it is a clone.
 			-TODO: devices
 			"""
 		if self.name == None:
 			return
+		self.msg = Messages(self.name)
 		print (f"Checking files for {self.name}")
 		
 		# RomZIPfile
@@ -655,10 +725,15 @@ class Rom:
 			# Rom file is at the Romset folder
 			print (('Checking roms:'))
 			self.__checkROMsSHA1__()
+		else:
+			self.msg.add('ZIP file at Romset', 'There is no ZIP file for this rom', spool='error')
 
 		if len (self.__CHDsfiles__()) > 0:
 			print ('Checking CHDs:')
 			self.__checkCHDsSHA1__()
+		
+		self.msg.Emsglist(notice='Some errors where ecountered:')
+		return self.msg.success
 
 class Romset:
 	def __init__ (self, con):
@@ -790,7 +865,7 @@ class Romset:
 				opclones_st *= -1
 				print (opclones[opclones_st])
 			if str(candidate) in options.keys():
-				print (f'Selected: {candidate}')
+				print (f'Selected: {options[candidate]}')
 				return options[candidate]
 			cursor = self.con.execute (f"SELECT name, description FROM games WHERE \
 						{opclones[opclones_st]} \
@@ -803,9 +878,7 @@ class Romset:
 			for i in cursor:
 				counter += 1
 				options [str(counter)] = i[0]
-				print (f'{counter} - {i[0]}\t,\t{i[1]}')
-
-		
+				print (f'{counter} - {i[0]}\t,\t{i[1]}')	
 
 class Bestgames:
 	""" Best games list by progetto, adds a score to the roms.
@@ -895,9 +968,6 @@ if __name__ == '__main__':
 						help="chds folder path. A folder where your romset CHDs are.")
 	parser.add_argument("-bg", "--bestgames", default="bestgames.ini",
 						help="bestgames ini file by progetto.")
-	parser.add_argument("-bps", "--bypass",
-						help="bypass xml file and load associated SQLite3 Database.")
-	
 
 	args = parser.parse_args()
 
@@ -907,7 +977,6 @@ if __name__ == '__main__':
 	biospath	= args.bios
 	romspath	= args.roms
 	bgfile		= args.bestgames
-	bypass		= args.bypass
 	chdspath	= args.chds
 
 	# Checking parameters
@@ -919,7 +988,7 @@ if __name__ == '__main__':
 	if itemcheck (bgfile) != "file":
 		warninglist.append (f"I can't find bestgames file:(--bestgames {bgfile})")
 
-	if itemcheck(xmlfile) 	!= "file" and bypass== None:
+	if itemcheck(xmlfile) 	!= "file":
 		warninglist.append (f"I can't find the xml file:(--xml {xmlfile})")
 
 	if itemcheck(chdspath) 	!= "folder":
@@ -937,10 +1006,10 @@ if __name__ == '__main__':
 	if dbpath:
 		con = sqlite3.connect (dbpath)	# Connection to SQL database.
 	else:
-		print ("Can't find a database, please specify one with --xml argument or use --bypass argument to work on an existent database.\n")
+		print ("Can't find a database, please specify one with --xml argument.\n")
 		exit()
 	# UseCase: Create the bios folder with a copy of all bios
-	# Bios(con).createbiosfolder()
+	# Bios(con).copyallbios()
 
 	# UseCase: Copy a rom from romset to rom folder include Bios and fix missing devices
 	# Rom (con, "wof").copyrom()
@@ -955,23 +1024,22 @@ if __name__ == '__main__':
 
 	#  User interface:
 	action = True
-	while action != "0":
+	while action != "":
 		user_options = {
 			"1": "Create a bios folder with all bios roms",
 			"2": "Search and copy a rom from Romset to Roms Folder",
 			"3": "Search and remove a rom from the Roms Folder",
 			"4": "Generate a games-list in CSV format (gamelist.csv)",
 			"5": "Proccess actions in games-list CSV file (gamelist.csv)",
-			"6": "Add bestgames,ini information to database",
-			"7": "Check files and rom integrity at the romset",
-			"0": "Exit",
+			"6": "Add bestgames.ini information to database",
+			"7": "Check a game romset for file integrity (roms, bios and chds)",
 			}
 		print ('\n')
 		for o in user_options:
 			print (f"{o} - {user_options[o]}")
 		action = input ("choose an option >")
 		if action == "1":
-			Bios(con).createbiosfolder()
+			Bios(con).copyallbios()
 		elif action == "2":
 			romname = Romset(con).chooserom ()
 			if romname:
@@ -989,8 +1057,8 @@ if __name__ == '__main__':
 		elif action == "7":
 			romname = Romset(con).chooserom ()
 			if romname:
-				Rom (con, romname).Checkrom()
-		elif action == "0":
+				Rom (con, romname).checkrom()
+		elif action == "":
 			print ("Done!")
 			exit ()
 		else:
