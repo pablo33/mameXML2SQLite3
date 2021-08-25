@@ -63,7 +63,7 @@ def printlist (mylist):
 		print (i)
 
 class Messages ():
-	""" Stores messages and produces outputt prints
+	""" Stores messages, process success and produces outputt prints
 		"""
 	def __init__ (self, name, verbose = True):
 		self.name = name
@@ -89,21 +89,31 @@ class Messages ():
 		""" Output a error messages as a list 
 			"""
 		if len (self.Emsg)>0:
+			returnedlist = []
 			a = 10
 			print (notice)
 			print ('='*a, f' ERRORS for {self.name}','='*a)
 			for i in self.Emsg:
-				print (' : '.join([self.name, i[0], i[1]]))
+				txt = ' : '.join([self.name, i[0], i[1]])
+				returnedlist.append(txt)
+				print (txt)
+			print ('\n')
+			return returnedlist
 
 	def Wmsglist (self, notice = ''):
 		""" Output a warning messages as a list 
 			"""
 		if len (self.Wmsg)>0:
 			print (notice)
+			returnedlist = []
 			a = 10
 			print ('='*a, f' Warnings for {self.name}','='*a)
 			for i in self.Wmsg:
-				print (' : '.join([self.name, i[0], i[1]]))
+				txt = ' : '.join([self.name, i[0], i[1]])
+				returnedlist.append(txt)
+				print (txt)
+			print ('\n')
+
 	
 	def mix (self, msg):
 		""" Mixes another msg spool object into this
@@ -512,7 +522,7 @@ class Rom:
 			print (f'{self.name} : deleted')
 		else:
 			self.msg.add (f'{self.name}:Rom ZIP',"File is not at your custom Rom folder")
-		return self.msg.success
+		return self.msg
 
 	def copyrom (self):
 		""" copy a romgame-pack from the romset folder to the roms folder
@@ -733,7 +743,7 @@ class Rom:
 			self.__checkCHDsSHA1__()
 		
 		self.msg.Emsglist(notice='Some errors where ecountered:')
-		return self.msg.success
+		return self.msg
 
 class Romset:
 	def __init__ (self, con):
@@ -798,6 +808,7 @@ class Romset:
 			actions are stored as text on 'action' column, and for now current actions are:
 				add		: to add a game from the romset to the custom rom folder
 				delete	: to delete a game-rom from the custom rom folder.
+				check	: to check a rom-game files, chds, integrity.
 			"""
 		if itemcheck (self.myCSVfile) != 'file':
 			print (f"There is no game list: ({self.myCSVfile}).")
@@ -806,7 +817,6 @@ class Romset:
 				self.games2csv()
 			else:
 				return
-
 		# process CSV
 		csvtmpfile = self.myCSVfile + '.tmp'
 		with open (csvtmpfile, 'w', newline='') as tmp:
@@ -821,9 +831,9 @@ class Romset:
 						continue
 					datadict = r
 					postkey = None
-					if datadict ['action'].lower() in ('add','remove'):
+					if datadict ['action'].lower() in ('add','remove', 'check'):
 						postkey = self.__dofileaction__ (datadict['action'].lower(), datadict['name'])
-					elif datadict ['action'] not in ('added','removed','error','unknown action',''):
+					elif datadict ['action'] not in ('added','removed','checked-OK','checked-ERROR','error','unknown action',''):
 						postkey = 'unknown action'
 					if postkey:
 						print (f"{datadict['name']}: {postkey}")
@@ -835,19 +845,25 @@ class Romset:
 
 	def __dofileaction__ (self, action, romname):
 		if action == 'add':
-			success = Rom (self.con, romname).copyrom()
-			if success:
+			msg = Rom (self.con, romname).copyrom()
+			if msg.success:
 				return 'added'
 			return 'error'
 		if action == 'remove':
-			success = Rom (self.con, romname).removerom()
-			if success:
+			msg = Rom (self.con, romname).removerom()
+			if msg.success:
 				return 'deleted'
 			return 'error'
-		return 
+		if action == 'check':
+			msg = Rom (self.con, romname).checkrom()
+			if msg.success:
+				return 'checked-OK'
+			return 'checked-ERROR'
+		return
 
 	def chooserom (self):
 		""" Choose a rom name from the database iterating a list of possible candidates.
+		Or by giving its unique name.
 			"""
 		candidate = True
 		options = dict ()
@@ -867,6 +883,10 @@ class Romset:
 			if str(candidate) in options.keys():
 				print (f'Selected: {options[candidate]}')
 				return options[candidate]
+			oneshot = self.con.execute (f"SELECT name, description FROM games WHERE \
+						name = '{candidate}'").fetchone()
+			if oneshot is not None:
+				return oneshot[0]
 			cursor = self.con.execute (f"SELECT name, description FROM games WHERE \
 						{opclones[opclones_st]} \
 						isdevice IS FALSE AND \
@@ -878,7 +898,7 @@ class Romset:
 			for i in cursor:
 				counter += 1
 				options [str(counter)] = i[0]
-				print (f'{counter} - {i[0]}\t,\t{i[1]}')	
+				print (f'{counter:<3} - {i[0]}\t,{i[1][:80]}')	
 
 class Bestgames:
 	""" Best games list by progetto, adds a score to the roms.
@@ -1027,8 +1047,8 @@ if __name__ == '__main__':
 	while action != "":
 		user_options = {
 			"1": "Create a bios folder with all bios roms",
-			"2": "Search and copy a rom from Romset to Roms Folder",
-			"3": "Search and remove a rom from the Roms Folder",
+			"2": "Search and copy a rom from Romset to custom Roms Folder",
+			"3": "Search and remove a rom from the custom Roms Folder",
 			"4": "Generate a games-list in CSV format (gamelist.csv)",
 			"5": "Proccess actions in games-list CSV file (gamelist.csv)",
 			"6": "Add bestgames.ini information to database",
@@ -1037,7 +1057,7 @@ if __name__ == '__main__':
 		print ('\n')
 		for o in user_options:
 			print (f"{o} - {user_options[o]}")
-		action = input ("choose an option >")
+		action = input ("choose an option, hit enter to exit > ")
 		if action == "1":
 			Bios(con).copyallbios()
 		elif action == "2":
