@@ -22,6 +22,7 @@ __doc__		= """
 # Standard libray imports
 import os, argparse, sqlite3, re, shutil, zipfile, csv
 from hashlib import sha1
+from glob import glob
 
 #=====================================
 # Custom Error Classes
@@ -39,7 +40,10 @@ class ValueNotExpected(ValueError):
 # Defaults
 #=====================================
 romsext		= '.zip'
+rsetpath 	= 'romset'
+artworkpath	= 'mame artwork'
 tmp			= 'tmp'
+
 
 #=====================================
 # Functions
@@ -129,6 +133,7 @@ def createSQL3 (xmlfile):
 	# 	one table for game information 		(there is only one value for the game)
 	#	one table for file rom information	(there are some values for a game)
 	#	one table for device rom information(there are some values for a game)
+	#	one table for damples rom information(there are some values for a game)
 
 	# for Gametable, define which tags contains attributes to fetch
 	# it will find attributes in this tags: <tag attribute=value/>
@@ -225,6 +230,12 @@ def createSQL3 (xmlfile):
 						"writable":	("dsk_writable", "char", ""),
 						}	
 
+	# for samples Table, define which tags contains attributes to fetch
+	spTagg = ("sample",)
+
+	splsfields = 		{"name": None,}
+	splsfields_type = 	{"name":	("spl_name", "char", "NOT NULL"),}	
+
 
 	class Readxmlline:
 		def __t2dtags__ (self, txt):
@@ -270,6 +281,7 @@ def createSQL3 (xmlfile):
 			self.tagg = tagg	# Tag <tag atributes>text</tag>
 			self.text = text	# text <tag atributes>text</tag>
 			self.attr = self.__t2dtags__(attr)   # attributes in a dictionary way
+
 		def data (self):
 			""" Returns read line data
 				"""
@@ -283,9 +295,11 @@ def createSQL3 (xmlfile):
 			self.__rf__ = romsfields.copy ()
 			self.__df__ = devsfields.copy ()
 			self.__kf__ = diskfields.copy ()
+			self.__sp__ = splsfields.copy ()
 			self.rflist = []
 			self.dflist = []
 			self.kflist = []
+			self.splist = []
 			
 		def __datatypeparser__ (self):
 			""" Parses internal string retrieved data into its correct type
@@ -363,6 +377,14 @@ def createSQL3 (xmlfile):
 					if i in data[1]:
 						self.__kf__[i] = data[1].get(i)
 				self.kflist.append ((self.gf['name'], self.__kf__.copy() ))
+			# adding splTable with attributes taggs
+			if data[0] in spTagg and data[1]!=None:
+				# reading attr from input dict
+				for i in splsfields:
+					if i in data[1]:
+						self.__sp__[i] = data[1].get(i)
+				self.splist.append ((self.gf['name'], self.__sp__.copy() ))
+		
 		def write2db (self):
 			""" Write data to Database
 				"""
@@ -393,6 +415,13 @@ def createSQL3 (xmlfile):
 				values.append (r[0]) # append key field with game name to the list
 				questions = ",".join("?"*len(r[1])) + ",?"
 				con.execute(f"INSERT INTO disks ({fields}) VALUES ({questions})", values)
+			# samples table
+			for r in self.splist:
+				fields = ",".join([splsfields_type[i][0] for i in r[1]]) + ",name"
+				values = [i for i in r[1].values()]
+				values.append (r[0]) # append key field with game name to the list
+				questions = ",".join("?"*len(r[1])) + ",?"
+				con.execute(f"INSERT INTO samples ({fields}) VALUES ({questions})", values)
 
 	# Checking and initializing the Database
 	########################################
@@ -421,6 +450,9 @@ def createSQL3 (xmlfile):
 	# disk table
 	tablefields = "name, " + ",".join( [i[0]+" "+i[1]+" "+i[2] for i in diskfields_type.values()]) 
 	cursor.execute (f'CREATE TABLE disks ({tablefields})')
+	# sample table
+	tablefields = "name, " + ",".join( [i[0]+" "+i[1]+" "+i[2] for i in splsfields_type.values()]) 
+	cursor.execute (f'CREATE TABLE samples ({tablefields})')
 	con.commit()
 
 	fh = open(xmlfile)
@@ -540,6 +572,7 @@ class Rom:
 				self.__adddevs__()
 			if self.msg.success:
 				self.__addchds__()
+				self.__addstuff__()
 			self.msg.Emsglist(notice="Something Was wrong, some files were not present.")
 		return self.msg
 
@@ -743,12 +776,49 @@ class Rom:
 		else:
 			self.msg.add('ZIP file at Romset', 'There is no ZIP file for this rom', spool='error')
 
+		# CHDs
 		if len (self.__CHDsfiles__()) > 0:
 			print ('Checking CHDs:')
 			self.__checkCHDsSHA1__()
-		
+
+		# TODO: Samples?
 		self.msg.Emsglist(notice='Some errors where ecountered:')
 		return self.msg
+
+	def __identifile__ (self, path, fileext):
+		filelist = glob(os.path.join(path,self.name + fileext))
+		if len (filelist) > 0:
+			print (f"Selected: {filelist[0]}")
+			return os.path.join(filelist[0])
+		return None
+
+	def __addstuff__ (self):
+		""" Adds stuff to the correspondent rom:
+			snaps
+			cheats
+			samples
+			"""
+		stuff = {
+				'snap'		: (snappath,	'snap',		'.*'),
+				'cheat'		: (cheatpath,	'cheat',	'.xml'),
+				'samples'	: (samplespath,	'samples',	'.zip'),
+				}
+		for i in stuff:
+			originpath, destpath, filetype = stuff[i]
+			if originpath == None:
+				continue
+			print (f"attaching {i}")
+			origin = self.__identifile__(originpath, filetype)
+			if origin == None:
+				self.msg.add(f"{i}","No file found for the game")
+				continue
+			dest = os.path.join(destpath, os.path.basename(origin))
+			if itemcheck (dest) == 'fie':
+				self.msg.add(f'{i}',f"file already exist")
+				continue
+			if itemcheck (destpath) != "folder":
+				os.mkdir(destpath)
+			shutil.copyfile (origin, dest)
 
 class Romset:
 	def __init__ (self, con):
@@ -979,36 +1049,50 @@ if __name__ == '__main__':
 	########################################
 	# Retrieve cmd line parameters
 	########################################
+	
 	parser = argparse.ArgumentParser()
 
 	parser.add_argument("-x", "--xml", default="mame.xml",
 						help="xml file path. xml romset file.")
-	parser.add_argument("-s", "--romset", default="romset",
+	parser.add_argument("-s", "--romset", default=os.path.join(rsetpath,"roms"),
 						help="romset folder path. Contains all mame romset.")
 	parser.add_argument("-b", "--bios", default="bios",
-						help="bios folder path. A folder where only the bios are.")
+						help="bios folder path. A folder where only the custom bios are.")
 	parser.add_argument("-r", "--roms", default="roms",
 						help="roms folder path. Your custom rom folder.")
-	parser.add_argument("-c", "--chds", default="chds",
+	parser.add_argument("-c", "--chds", default=os.path.join(rsetpath,"chds"),
 						help="chds folder path. A folder where your romset CHDs are.")
 	parser.add_argument("-bg", "--bestgames", default="bestgames.ini",
 						help="bestgames ini file by progetto.")
+	parser.add_argument("-sn", "--snap", default=os.path.join(rsetpath,artworkpath,"snap"),
+						help="artwork snap folder")
+	parser.add_argument("-ch", "--cheat", default=os.path.join(rsetpath, "cheat"),
+						help="cheat folder")
+	parser.add_argument("-sm", "--samples", default=os.path.join(rsetpath,"samples"),
+						help="samples folder")
+						
 
 	args = parser.parse_args()
 
 	# Retrieving variables from args
+		# defaults on current dir
 	xmlfile		= args.xml
 	romsetpath	= args.romset
 	biospath	= args.bios
 	romspath	= args.roms
 	bgfile		= args.bestgames
+		# defaults on romset dir
 	chdspath	= args.chds
+	samplespath	= args.samples
+	cheatpath	= args.cheat
+			#defaults on romset/mameartwork
+	snappath	= args.snap
 
 	# Checking parameters
 	errorlist 	= []
 	warninglist	= []
 	if itemcheck(romsetpath)	!= "folder":
-		errorlist.append (f"I can't find romset folder:(--bios {romsetpath})")
+		errorlist.append (f"I can't find romset folder:(--romset {romsetpath})")
 
 	if itemcheck (bgfile) != "file":
 		warninglist.append (f"I can't find bestgames file:(--bestgames {bgfile})")
@@ -1019,6 +1103,15 @@ if __name__ == '__main__':
 	if itemcheck(chdspath) 	!= "folder":
 		warninglist.append (f"I can't find the chds folder:(--chds {chdspath})")
 		chdspath = None
+	if itemcheck(cheatpath)	!= "folder":
+		warninglist.append (f"I can't find the cheats folder:(--cheat {cheatpath})")
+		cheatpath = None
+	if itemcheck(samplespath)!= "folder":
+		warninglist.append (f"I can't find the sample folder:(--samples {samplespath})")
+		samplespath = None
+	if itemcheck(snappath) 	!= "folder":
+		warninglist.append (f"I can't find the snap folder:(--snap {snappath})")
+		snappath = None
 
 	if len (warninglist) > 0:
 		printlist (warninglist)
@@ -1033,21 +1126,9 @@ if __name__ == '__main__':
 	else:
 		print ("Can't find a database, please specify one with --xml argument.\n")
 		exit()
-	# UseCase: Create the bios folder with a copy of all bios
-	# Bios(con).copyallbios()
-
-	# UseCase: Copy a rom from romset to rom folder include Bios and fix missing devices
-	# Rom (con, "wof").copyrom()
-	# Rom (con, "wof").removerom()
-
-	# UseCase: Generate a list of games in CSV (tab-separated)
-	# Romset (con).games2csv()
-	# Romset (con).processCSVlist()
-
-	# bestgames.ini to database from progettoSNAPS.net
-	# Bestgames (con, bgfile).addscores()
 
 	#  User interface:
+	#=====================
 	action = True
 	while action != "":
 		user_options = {
@@ -1089,4 +1170,3 @@ if __name__ == '__main__':
 		else:
 			print ("\n"*5)
 			print ("unknown action, please enter a number")
-		
