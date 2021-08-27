@@ -917,11 +917,11 @@ class Romset:
 				return
 		# process CSV
 		csvtmpfile = self.myCSVfile + '.tmp'
-		with open (csvtmpfile, 'w', newline='') as tmp:
-			writer = csv.DictWriter(tmp, self.headerlist, dialect='excel-tab')	# Outtput file
-			line = 0
-			with open (self.myCSVfile, 'r', newline='') as csvfile:
-				reader = csv.DictReader (csvfile, dialect='excel-tab')
+		with open (self.myCSVfile, 'r', newline='') as csvfile:
+			reader = csv.DictReader (csvfile, dialect='excel-tab')
+			with open (csvtmpfile, 'w', newline='') as tmp:
+				writer = csv.DictWriter(tmp, reader.fieldnames, dialect='excel-tab')	# Outtput file
+				line = 0
 				for r in reader:
 					line += 1
 					if line == 1:
