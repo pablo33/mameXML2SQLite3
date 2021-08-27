@@ -1,20 +1,24 @@
 .gitignore
-
-
 # Test files
+
 
 .gitignore
 deleteme
 tests
 mame.*
 romset*
-chds
-bios
-roms
 notes.ods
 gamelist.csv
 bestgames.ini
 stuff
+snap
+romset
+cheat
+chds
+bios
+roms
+
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

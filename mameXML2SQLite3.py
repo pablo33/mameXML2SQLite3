@@ -428,7 +428,7 @@ def createSQL3 (xmlfile):
 	dbpath = os.path.splitext(xmlfile)[0] + ".sqlite3"
 
 	if itemcheck (dbpath) == 'file':
-		print ("Database Found, loading it")
+		print ("Database found, loading it.")
 		return (dbpath)
 	elif itemcheck (xmlfile) != 'file':
 		print ("I can't find xml or associated database. Can't continue")
@@ -542,6 +542,7 @@ class Rom:
 			self.origin	= check (romname, romsetpath)
 			self.dest 	= check (romname, romspath)
 			self.maingame, self.bios = self.__maingame__ ()
+			self.devices = self.__deviceslist__()
 
 	def removerom (self):
 		""" removes a rom file from the custom rom folder
@@ -758,6 +759,24 @@ class Rom:
 		status = self.con.execute (f"SELECT rom_status FROM roms WHERE name='{self.name}' AND rom_name = '{rom_name}'").fetchone()[0]
 		return status
 
+	def __deviceslist__ (self):
+		"""a list of devices for this rom
+			"""
+		cursor = self.con.execute (f"SELECT dev_name FROM devs WHERE name = '{self.name}'")
+		dlist = list()
+		for r in cursor:
+			dlist.append(r[0])
+		if dlist == []:
+			return None
+		return dlist
+
+	def __checkdevices__ (self):
+		""" Check content of devices roms in .zip file for this rom.
+			"""
+		for d in self.devices:
+			msg = Rom(self.con, d).checkrom()
+			self.msg.mix(msg)
+	
 	def checkrom (self):
 		""" Checks rom integrity at the romset
 			Checks for the SHA1 for the files, bios and parents games is it is a clone.
@@ -781,7 +800,11 @@ class Rom:
 			print ('Checking CHDs:')
 			self.__checkCHDsSHA1__()
 
-		# TODO: Samples?
+		# Devices
+		if self.devices != None:
+			print ('checking devices:')
+			self.__checkdevices__()
+			
 		self.msg.Emsglist(notice='Some errors where ecountered:')
 		return self.msg
 
