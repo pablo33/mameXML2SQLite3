@@ -44,7 +44,6 @@ rsetpath 	= 'romset'
 artworkpath	= 'mame artwork'
 tmp			= 'tmp'
 
-
 #=====================================
 # Functions
 #=====================================
@@ -61,10 +60,6 @@ def itemcheck(pointer):
 	if os.path.islink(pointer):
 		return 'link'
 	return ""
-
-def printlist (mylist):
-	for i in mylist:
-		print (i)
 
 class Messages ():
 	""" Stores messages, process success and produces outputt prints
@@ -1114,15 +1109,16 @@ if __name__ == '__main__':
 	# Checking parameters
 	errorlist 	= []
 	warninglist	= []
+
+		# Errors
 	if itemcheck(romsetpath)	!= "folder":
 		errorlist.append (f"I can't find romset folder:(--romset {romsetpath})")
-
 	if itemcheck (bgfile) != "file":
 		warninglist.append (f"I can't find bestgames file:(--bestgames {bgfile})")
 
+		#Warnings
 	if itemcheck(xmlfile) 	!= "file":
 		warninglist.append (f"I can't find the xml file:(--xml {xmlfile})")
-
 	if itemcheck(chdspath) 	!= "folder":
 		warninglist.append (f"I can't find the chds folder:(--chds {chdspath})")
 		chdspath = None
@@ -1137,10 +1133,10 @@ if __name__ == '__main__':
 		snappath = None
 
 	if len (warninglist) > 0:
-		printlist (warninglist)
+		print (i for i in (warninglist))
 	if len (errorlist) > 0:
 		errorlist.append ("Please revise errors and try again")
-		printlist (errorlist)
+		print (i for i in (warninglist))
 		exit()
 
 	dbpath = createSQL3(xmlfile)	# Creating or load an existent SQLite3 Database
@@ -1161,7 +1157,7 @@ if __name__ == '__main__':
 			"4": "Generate a games-list in CSV format (gamelist.csv)",
 			"5": "Proccess actions in games-list CSV file (gamelist.csv)",
 			"6": "Add bestgames.ini information to database",
-			"7": "Check a game romset for file integrity (roms, bios and chds)",
+			"7": "Check a game romset for file integrity (roms and related parents, bios, chds, devices)",
 			}
 		print ('\n')
 		for o in user_options:
