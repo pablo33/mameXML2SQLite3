@@ -41,7 +41,7 @@ class ValueNotExpected(ValueError):
 #=====================================
 romsext		= '.zip'
 rsetpath 	= 'romset'
-artworkpath	= 'mame artwork'
+artworkpath	= 'artwork'
 tmp			= 'tmp'
 
 #=====================================
@@ -1074,20 +1074,20 @@ if __name__ == '__main__':
 						help="xml file path. xml romset file.")
 	parser.add_argument("-s", "--romset", default=os.path.join(rsetpath,"roms"),
 						help="romset folder path. Contains all mame romset.")
-	parser.add_argument("-b", "--bios", default="bios",
-						help="bios folder path. A folder where only the custom bios are.")
-	parser.add_argument("-r", "--roms", default="roms",
-						help="roms folder path. Your custom rom folder.")
 	parser.add_argument("-c", "--chds", default=os.path.join(rsetpath,"chds"),
 						help="chds folder path. A folder where your romset CHDs are.")
-	parser.add_argument("-bg", "--bestgames", default="bestgames.ini",
-						help="bestgames ini file by progetto.")
-	parser.add_argument("-sn", "--snap", default=os.path.join(rsetpath,artworkpath,"snap"),
-						help="artwork snap folder")
 	parser.add_argument("-ch", "--cheat", default=os.path.join(rsetpath, "cheat"),
 						help="cheat folder")
 	parser.add_argument("-sm", "--samples", default=os.path.join(rsetpath,"samples"),
 						help="samples folder")
+	parser.add_argument("-b", "--bios", default="bios",
+						help="bios folder path. A folder where only the custom bios are.")
+	parser.add_argument("-sn", "--snap", default=os.path.join(rsetpath,artworkpath,"snap"),
+						help="artwork snap folder")
+	parser.add_argument("-r", "--roms", default="roms",
+						help="roms folder path. Your custom rom folder.")
+	parser.add_argument("-bg", "--bestgames", default="bestgames.ini",
+						help="bestgames ini file by progetto.")
 						
 
 	args = parser.parse_args()
