@@ -14,4 +14,8 @@ This script runs on a python3 interpreter, I use it on a linux environment, but 
 
 Tested on mame 149 romset.  
 
-See wiki pages for more information.. https://github.com/pablo33/mameXML2SQLite3/wiki
+See wiki pages for more information.. https://github.com/pablo33/mameXML2SQLite3/wiki  
+
+I did this script just for fun, and to have a organized custom games collection on an arcade cabinet.  
+Feel free to submit a new issue if you find any bugs.  
+Have Fun!
