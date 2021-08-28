@@ -14,4 +14,4 @@ This script runs on a python3 interpreter, I use it on a linux environment, but 
 
 Tested on mame 149 romset.  
 
-See wiki pages for more information..
+See wiki pages for more information.. https://github.com/pablo33/mameXML2SQLite3/wiki
