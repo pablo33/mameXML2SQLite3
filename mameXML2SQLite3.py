@@ -743,7 +743,7 @@ class Rom:
 			else:
 				romstatus = self.__romstatus__ (r)
 				if romstatus != None:
-					self.msg.add(r, f"Rom not present at zip file: rom with {romstatus} status",)	
+					self.msg.add(r, f"Rom not present at zip file: rom with {romstatus} status : (Warning)",)	
 				else:
 					self.msg.add(r, "Rom not present at zip file", spool='error')
 			checked.append (r)
@@ -786,19 +786,19 @@ class Rom:
 		# RomZIPfile
 		if self.origin [1]:
 			# Rom file is at the Romset folder
-			print (('Checking roms:'))
+			print (('>Checking roms:'))
 			self.__checkROMsSHA1__()
 		else:
 			self.msg.add('ZIP file at Romset', 'There is no ZIP file for this rom', spool='error')
 
 		# CHDs
 		if len (self.__CHDsfiles__()) > 0:
-			print ('Checking CHDs:')
+			print ('>Checking CHDs:')
 			self.__checkCHDsSHA1__()
 
 		# Devices
 		if self.devices != None:
-			print ('checking devices:')
+			print ('>Checking devices:')
 			self.__checkdevices__()
 			
 		self.msg.Emsglist(notice='Some errors where ecountered:')
@@ -964,10 +964,10 @@ class Romset:
 		opclones = {1: ' cloneof is NULL AND ', -1 : ''}
 		opclones_st = 1
 		while True:
-			print ('commands and active filters:')
-			print ('/clones','\t', opclones[opclones_st])
+			print ('\t(commands and active filters:)')
+			print ('\t/clones','\t', opclones[opclones_st])
 			print ('-'*30)
-			print ('Press enter to exit')
+			print ('Enter a rom-name, or a word in his description, or a number in the list, press enter to exit')
 			candidate = input ('find a rom by name: ')
 			if candidate == "":
 				return False
@@ -981,6 +981,7 @@ class Romset:
 						name = '{candidate}'").fetchone()
 			if oneshot is not None:
 				return oneshot[0]
+			print ("\n"*2, f">> searching {candidate}>>")
 			cursor = self.con.execute (f"SELECT name, description FROM games WHERE \
 						{opclones[opclones_st]} \
 						isdevice IS FALSE AND \
@@ -992,7 +993,9 @@ class Romset:
 			for i in cursor:
 				counter += 1
 				options [str(counter)] = i[0]
-				print (f'{counter:<3} - {i[0]}\t,{i[1][:80]}')	
+				print (f'{counter:<3} - {i[0]}\t,{i[1][:80]}')
+			if counter == 0:
+				print ("No candidates found, try to enter a word on his description.")
 
 class Bestgames:
 	""" Best games list by progetto, adds a score to the roms.
@@ -1193,5 +1196,5 @@ if __name__ == '__main__':
 			print ("Done!")
 			exit ()
 		else:
-			print ("\n"*5)
+			print ("\n"*4)
 			print ("unknown action, please enter a number")
