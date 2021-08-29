@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 # -*- encoding: utf-8 -*-
 
-__version__ = "0.4"
+__version__ = "0.41"
 __author__  = "pablo33"
 __doc__		= """
 	This software helps you managing a Mame Romset.
@@ -113,7 +113,6 @@ class Messages ():
 				print (txt)
 			print ('\n')
 
-	
 	def mix (self, msg):
 		""" Mixes another msg spool object into this
 			"""
@@ -713,7 +712,9 @@ class Rom:
 			if filedigest == sqldigest[0]:
 				print (f"{self.name}\tsha1 OK: {filename}")
 			else:
-				self.msg.add(filename, "\tsha1 do not match, game may not work", spool='error')
+				self.msg.add(filename, f"\tsha1 do not match, game may not work: {file}", spool='error')
+		else:
+			self.msg.add(file, f"\tfile does not exist: {file}", spool='error')
 
 	def __checkCHDsSHA1__ (self):
 		""" Checks CHDs files at romset
@@ -1089,7 +1090,6 @@ if __name__ == '__main__':
 	parser.add_argument("-bg", "--bestgames", default="bestgames.ini",
 						help="bestgames ini file by progetto.")
 						
-
 	args = parser.parse_args()
 
 	# Retrieving variables from args
@@ -1115,6 +1115,10 @@ if __name__ == '__main__':
 		errorlist.append (f"I can't find romset folder:(--romset {romsetpath})")
 	if itemcheck (bgfile) != "file":
 		warninglist.append (f"I can't find bestgames file:(--bestgames {bgfile})")
+	if biospath == romsetpath:
+		errorlist.append (f'please, place bios folder out of your romset folder: {biospath}')
+	if romspath == romsetpath:
+		errorlist.append (f'please, place your custom roms path out of your romset folder: {romspath}')
 
 		#Warnings
 	if itemcheck(xmlfile) 	!= "file":
@@ -1133,10 +1137,12 @@ if __name__ == '__main__':
 		snappath = None
 
 	if len (warninglist) > 0:
-		print (i for i in (warninglist))
+		for i in warninglist:
+			print (i)
 	if len (errorlist) > 0:
 		errorlist.append ("Please revise errors and try again")
-		print (i for i in (warninglist))
+		for i in errorlist:
+			print (i)
 		exit()
 
 	dbpath = createSQL3(xmlfile)	# Creating or load an existent SQLite3 Database
