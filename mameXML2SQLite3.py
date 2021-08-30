@@ -20,6 +20,7 @@ __doc__		= """
 """
 
 # Standard libray imports
+from io import DEFAULT_BUFFER_SIZE
 import os, argparse, sqlite3, re, shutil, zipfile, csv
 from hashlib import sha1
 from glob import glob
@@ -506,6 +507,21 @@ class Bios:
 			self.msg.add ({biosname},"bios already exist on bios folder",spool='error')
 			return
 		shutil.copyfile (origin[0], dest[0])
+	
+	def movebios (self):
+		""" Moves all bios files from your custom Rom folder to a bios folder
+			"""
+		cursor = self.con.execute ("SELECT name FROM games WHERE isbios = 1")
+		for biosname in cursor:
+			origin	= check (biosname[0], romspath)
+			dest	= check (biosname[0], biospath)
+			if origin[1] == False:
+				continue
+			if dest[1] == True:
+				self.msg.add ({biosname[0]},"bios already exist on bios folder")
+				os.remove (origin[0])
+				continue
+			shutil.move (origin[0], dest[0])
 
 class Rom:
 	""" Represents a game. It must be in a .zip file
@@ -561,8 +577,8 @@ class Rom:
 			if self.romof != None:
 				msgs = Rom (con, self.romof).copyrom()
 				self.msg.mix(msgs) 
-			if self.isbios:
-				Bios (con).copybios(self.name)
+			#if self.isbios:
+			#	Bios (con).copybios(self.name)
 			if self.msg.success:
 				self.__adddevs__()
 			if self.msg.success:
@@ -1178,6 +1194,7 @@ if __name__ == '__main__':
 			"5": "Proccess actions in games-list CSV file (gamelist.csv)",
 			"6": "Add bestgames.ini information to database",
 			"7": "Check a game romset for file integrity (roms and related parents, bios, chds, devices)",
+			"8": "Move all bios files from Custom Romset to Bios folder",
 			}
 		print ('\n')
 		for o in user_options:
@@ -1203,6 +1220,8 @@ if __name__ == '__main__':
 			romname = Romset(con).chooserom ()
 			if romname:
 				Rom (con, romname).checkrom()
+		elif action == "8":
+			Bios(con).movebios()
 		elif action == "":
 			print ("Done!")
 			exit ()
