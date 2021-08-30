@@ -44,7 +44,7 @@ class ValueNotExpected(ValueError):
 romsext		= '.zip'
 rsetpath 	= 'romset'
 artworkpath	= 'artwork'
-tmp			= 'tmp'
+tmppath		= 'tmp'
 
 #=====================================
 # Functions
@@ -680,12 +680,12 @@ class Rom:
 		mergezip  = zipfile.ZipFile(self.dest.file, mode='a')
 		if len (tomerge) > 0:
 			for i in tomerge:
-				sourcezip.extract (i, path='tmp')
-				mergezip.write(os.path.join('tmp',i),i)
+				sourcezip.extract (i, path=tmppath)
+				mergezip.write(os.path.join(tmppath,i),i)
 				print (f"Added {i} device file to rom.")
 			sourcezip.close()
 			mergezip.close()
-			shutil.rmtree('tmp')
+			shutil.rmtree(tmppath)
 		return True
 
 	def __fileromset__ (self, romname, table, field):
@@ -766,9 +766,9 @@ class Rom:
 			elif r in checked:
 				continue
 			elif r in romlistzip:
-				extracted = a.extract(r,tmp)
+				extracted = a.extract(r,tmppath)
 				self.__checkSHA1__(extracted, 'roms', 'rom_name', 'rom_sha1')
-				os.remove(os.path.join(tmp,r))
+				os.remove(os.path.join(tmppath,r))
 			else:
 				romstatus = self.__romstatus__ (r)
 				if romstatus != None:
@@ -817,6 +817,8 @@ class Rom:
 			# Rom file is at the Romset folder
 			print (('>Checking roms:'))
 			self.__checkROMsSHA1__()
+			if itemcheck (tmppath) == 'folder': 
+				shutil.rmtree(tmppath)
 		else:
 			self.msg.add('ZIP file at Romset', 'There is no ZIP file for this rom', spool='error')
 
@@ -883,7 +885,6 @@ class Rom:
 			if dest != None:
 				if itemcheck (dest) == 'file':
 					os.remove(dest)
-
 
 class Romset:
 	def __init__ (self, con):
