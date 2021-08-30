@@ -24,6 +24,7 @@ from io import DEFAULT_BUFFER_SIZE
 import os, argparse, sqlite3, re, shutil, zipfile, csv
 from hashlib import sha1
 from glob import glob
+from collections import namedtuple
 
 #=====================================
 # Custom Error Classes
@@ -474,10 +475,11 @@ def check (file, path):
 		Todo: check on diverse file extensions
 		Todo: also in conbination of upper and lower case. 
 		"""
+	myfile = namedtuple ('file', ['file','exists']) 
 	fullfilepath = os.path.join(path,file + romsext) 
 	if itemcheck (fullfilepath) == 'file':
-		return (fullfilepath, True)
-	return (fullfilepath, False)
+		return myfile (fullfilepath, True)
+	return myfile (fullfilepath, False)
 
 class Bios:
 	def __init__(self,con):
@@ -493,20 +495,20 @@ class Bios:
 		cursor = self.con.execute ("SELECT name,description FROM games WHERE isbios = 1")
 		for b in cursor:
 			self.copybios (b[0])
-		self.msg.Emsglist()
+		self.msg.Emsglist(notice='Errors encountered')
 
 	def copybios (self,biosname):
 		""" copy a bios from romset to bios folder
 			"""
 		origin 	= check (biosname, romsetpath)
 		dest 	= check (biosname, biospath)
-		if origin[1] == False:
-			self.msg.add ({biosname},"bios is not present at romset",spool='error')
+		if origin.exists == False:
+			self.msg.add (biosname,"bios is not present at romset",spool='error')
 			return
-		if dest[1] == True:
-			self.msg.add ({biosname},"bios already exist on bios folder",spool='error')
+		if dest.exists == True:
+			self.msg.add (biosname,"bios already exist on bios folder",spool='error')
 			return
-		shutil.copyfile (origin[0], dest[0])
+		shutil.copyfile (origin.file, dest.file)
 	
 	def movebios (self):
 		""" Moves all bios files from your custom Rom folder to a bios folder
@@ -515,13 +517,13 @@ class Bios:
 		for biosname in cursor:
 			origin	= check (biosname[0], romspath)
 			dest	= check (biosname[0], biospath)
-			if origin[1] == False:
+			if origin.exists == False:
 				continue
-			if dest[1] == True:
+			if dest.exists == True:
 				self.msg.add ({biosname[0]},"bios already exist on bios folder")
-				os.remove (origin[0])
+				os.remove (origin.file)
 				continue
-			shutil.move (origin[0], dest[0])
+			shutil.move (origin.file, dest.file)
 
 class Rom:
 	""" Represents a game. It must be in a .zip file
@@ -540,6 +542,11 @@ class Rom:
 			print (f"creating roms folder at: {romspath}")
 			os.makedirs (romspath)
 		romheads = con.execute (f'SELECT name,cloneof,romof, isbios FROM games WHERE name = "{romname}"').fetchone()
+		self.stuff = {
+			'snap'		: (snappath,	'snap',		'.*'),
+			'cheat'		: (cheatpath,	'cheat',	'.xml'),
+			'samples'	: (samplespath,	'samples',	'.zip'),
+			}
 		if romheads == None:
 			#print (f'Thereis no rom-game called {romname}')
 			self.msg.add('XML',f'Thereis no rom-game called {romname}', spool = 'error')
@@ -560,11 +567,12 @@ class Rom:
 		self.msg = Messages(self.name)
 		if self.name == None:
 			return
-		if self.dest[1]:
-			os.remove (self.dest[0])
+		if self.dest.exists:
+			os.remove (self.dest.file)
 			print (f'{self.name} : deleted')
 		else:
 			self.msg.add (f'{self.name}:Rom ZIP',"File is not at your custom Rom folder")
+		
 		return self.msg
 
 	def copyrom (self):
@@ -590,13 +598,13 @@ class Rom:
 	def __copyfile__ (self):
 		""" copy a romfile to roms folder
 			"""
-		if self.origin[1] == False:
+		if self.origin.exists == False:
 			self.msg.add('Rom at romset',f"{self.name} file is not present",spool='error')
 			return
-		if self.dest[1] == True:
+		if self.dest.exists == True:
 			self.msg.add('Rom at romset',f"{self.name} file already exist")
 			return
-		shutil.copyfile (self.origin[0], self.dest[0])
+		shutil.copyfile (self.origin.file, self.dest.file)
 		return
 
 	def __adddevs__ (self):
@@ -662,9 +670,9 @@ class Rom:
 		if not sourcepath [1]:
 			self.msg.add(f'mergerom: {sourcepath[0]}', 'File is not present', spool='error')
 			return
-		sourcepath = sourcepath[0]
+		sourcepath = sourcepath.file
 		sourcezip = zipfile.ZipFile(sourcepath, mode='r')
-		mergezip  = zipfile.ZipFile(self.dest[0], mode='a')
+		mergezip  = zipfile.ZipFile(self.dest.file, mode='a')
 		if len (tomerge) > 0:
 			for i in tomerge:
 				sourcezip.extract (i, path='tmp')
@@ -742,7 +750,7 @@ class Rom:
 	def __checkROMsSHA1__ (self):
 		checked = []
 		a = zipfile.ZipFile(self.origin[0], mode='r')
-		romlistzip = self.__filezipromset__(self.origin[0])
+		romlistzip = self.__filezipromset__(self.origin.file)
 		romlist = self.__fileromset__(self.name,'roms','rom_name')
 		for r in romlist:
 			if r not in list(romlistzip) and self.romof is not None and r not in checked:
@@ -800,7 +808,7 @@ class Rom:
 		print (f"Checking files for {self.name}")
 		
 		# RomZIPfile
-		if self.origin [1]:
+		if self.origin.exists:
 			# Rom file is at the Romset folder
 			print (('>Checking roms:'))
 			self.__checkROMsSHA1__()
@@ -833,13 +841,8 @@ class Rom:
 			cheats
 			samples
 			"""
-		stuff = {
-				'snap'		: (snappath,	'snap',		'.*'),
-				'cheat'		: (cheatpath,	'cheat',	'.xml'),
-				'samples'	: (samplespath,	'samples',	'.zip'),
-				}
-		for i in stuff:
-			originpath, destpath, filetype = stuff[i]
+		for i in self.stuff:
+			originpath, destpath, filetype = self.stuff[i]
 			if originpath == None:
 				continue
 			unzip = False
