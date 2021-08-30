@@ -826,18 +826,29 @@ class Rom:
 			originpath, destpath, filetype = stuff[i]
 			if originpath == None:
 				continue
+			unzip = False
 			print (f"attaching {i}")
 			origin = self.__identifile__(originpath, filetype)
 			if origin == None:
-				self.msg.add(f"{i}","No file found for the game")
-				continue
+				origin = os.path.join(originpath,destpath)+'.zip' # search for a zip file
+				if itemcheck (origin) == 'file':
+					ziplist = self.__filezipromset__(origin)
+					element = self.name + filetype
+					if element in ziplist:
+ 						unzip = True
+				else:
+					self.msg.add(f"{i}","No file found for the game")
+					continue
 			dest = os.path.join(destpath, os.path.basename(origin))
-			if itemcheck (dest) == 'fie':
+			if itemcheck (dest) == 'file':
 				self.msg.add(f'{i}',f"file already exist")
 				continue
 			if itemcheck (destpath) != "folder":
 				os.mkdir(destpath)
-			shutil.copyfile (origin, dest)
+			if unzip:
+				zipfile.ZipFile(origin, mode='r').extract(element, destpath )
+			else:
+				shutil.copyfile (origin, dest)
 
 class Romset:
 	def __init__ (self, con):
