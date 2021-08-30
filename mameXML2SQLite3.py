@@ -553,13 +553,16 @@ class Rom:
 			self.name 	= None
 			self.origin = (None, None)
 			self.dest 	= (None, None)
+			self.devices = None
 			self.maingame, self.bios = None, None
+			self.chdgamedir = None
 		else:
 			self.name, self.cloneof, self.romof, self.isbios = romheads
 			self.origin	= check (romname, romsetpath)
 			self.dest 	= check (romname, romspath)
-			self.maingame, self.bios = self.__maingame__ ()
 			self.devices = self.__deviceslist__()
+			self.maingame, self.bios = self.__maingame__ ()
+			self.chdgamedir = os.path.join (romspath, self.maingame)
 
 	def removerom (self):
 		""" removes a rom file from the custom rom folder
@@ -572,7 +575,10 @@ class Rom:
 			print (f'{self.name} : deleted')
 		else:
 			self.msg.add (f'{self.name}:Rom ZIP',"File is not at your custom Rom folder")
-		
+		self.__removestuff__()
+		# removing CHDs
+		if itemcheck (self.chdgamedir) == 'folder':
+			shutil.rmtree (self.chdgamedir)
 		return self.msg
 
 	def copyrom (self):
@@ -630,13 +636,12 @@ class Rom:
 			"""
 		for origin in self.__CHDsfiles__():
 			file = os.path.basename (origin)
-			dest = os.path.join (romspath, self.maingame, file)
-			chdgamedir = os.path.join (romspath, self.maingame)
+			dest = os.path.join (self.chdgamedir, file)
 			if itemcheck (origin) != 'file':
 				self.msg.add('CHD',f'CHD not found: {origin}', spool='error')
 				return False
-			if itemcheck (chdgamedir) != 'folder':
-				os.mkdir (chdgamedir)
+			if itemcheck (self.chdgamedir) != 'folder':
+				os.mkdir (self.chdgamedir)
 			elif itemcheck (dest) == 'file':
 				self.msg.add('CHD',f'file already at CHDs folder {dest}')
 			shutil.copy (origin, dest)
@@ -868,6 +873,17 @@ class Rom:
 				zipfile.ZipFile(origin, mode='r').extract(element, destpath )
 			else:
 				shutil.copyfile (origin, dest)
+	
+	def __removestuff__(self):
+		""" Removes rom Stuff form the custom roms library
+			"""
+		for i in self.stuff:
+			originpath, destpath, filetype = self.stuff[i]
+			dest = self.__identifile__(destpath, filetype)
+			if dest != None:
+				if itemcheck (dest) == 'file':
+					os.remove(dest)
+
 
 class Romset:
 	def __init__ (self, con):
