@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 # -*- encoding: utf-8 -*-
 
-__version__ = "0.41"
+__version__ = "0.42"
 __author__  = "pablo33"
 __doc__		= """
 	This software helps you managing a Mame Romset.
@@ -15,7 +15,7 @@ __doc__		= """
 
 	Works on a splitted romset.
 	generate your mame xml file with the mame version of your romset, 
-	or download XML file from the web.
+	or download XML file from the web.__checkROMsSHA1__
 
 """
 
@@ -254,6 +254,7 @@ def createSQL3 (xmlfile):
 			attr = None
 			text = None
 			clos = False
+			
 			# Search for <tag attributes>
 			res = re.search (r"<([a-z_]+) (.*)>",l)
 			if res != None:
@@ -437,18 +438,15 @@ def createSQL3 (xmlfile):
 	# game table
 	tablefields = ",".join( [i[0]+" "+i[1]+" "+i[2] for i in gamefields_type.values()]) 
 	cursor.execute (f'CREATE TABLE games ({tablefields})')
-	# roms table
-	tablefields = "name, " + ",".join( [i[0]+" "+i[1]+" "+i[2] for i in romsfields_type.values()]) 
-	cursor.execute (f'CREATE TABLE roms ({tablefields})')
-	# devs table
-	tablefields = "name, " + ",".join( [i[0]+" "+i[1]+" "+i[2] for i in devsfields_type.values()]) 
-	cursor.execute (f'CREATE TABLE devs ({tablefields})')
-	# disk table
-	tablefields = "name, " + ",".join( [i[0]+" "+i[1]+" "+i[2] for i in diskfields_type.values()]) 
-	cursor.execute (f'CREATE TABLE disks ({tablefields})')
-	# sample table
-	tablefields = "name, " + ",".join( [i[0]+" "+i[1]+" "+i[2] for i in splsfields_type.values()]) 
-	cursor.execute (f'CREATE TABLE samples ({tablefields})')
+	# creating dependant tables
+	for t,f in (
+			('roms', 	romsfields_type.values()	),
+			('devs', 	devsfields_type.values()	),
+			('disks', 	diskfields_type.values()	),
+			('samples', splsfields_type.values()	),
+			):
+		tablefields = "name, " + ",".join( [i[0]+" "+i[1]+" "+i[2] for i in f]) 
+		cursor.execute (f'CREATE TABLE {t} ({tablefields})')
 	con.commit()
 
 	fh = open(xmlfile)
@@ -754,28 +752,31 @@ class Rom:
 
 	def __checkROMsSHA1__ (self):
 		checked = []
-		a = zipfile.ZipFile(self.origin[0], mode='r')
-		romlistzip = self.__filezipromset__(self.origin.file)
-		romlist = self.__fileromset__(self.name,'roms','rom_name')
-		for r in romlist:
-			if r not in list(romlistzip) and self.romof is not None and r not in checked:
-				rchecked, msg = Rom (self.con, self.romof).__checkROMsSHA1__()
-				checked += rchecked	# Returns a list of already checked roms
-				self.msg.mix(msg)	# Returning messages, merging them to msg object
-				continue
-			elif r in checked:
-				continue
-			elif r in romlistzip:
-				extracted = a.extract(r,tmppath)
-				self.__checkSHA1__(extracted, 'roms', 'rom_name', 'rom_sha1')
-				os.remove(os.path.join(tmppath,r))
-			else:
-				romstatus = self.__romstatus__ (r)
-				if romstatus != None:
-					self.msg.add(r, f"Rom not present at zip file: rom with {romstatus} status : (Warning)",)	
+		if self.origin.exists:
+			a = zipfile.ZipFile(self.origin.file, mode='r')
+			romlistzip = self.__filezipromset__(self.origin.file)
+			romlist = self.__fileromset__(self.name,'roms','rom_name')
+			for r in romlist:
+				if r not in list(romlistzip) and self.romof is not None and r not in checked:
+					rchecked, msg = Rom (self.con, self.romof).__checkROMsSHA1__()
+					checked += rchecked	# Returns a list of already checked roms
+					self.msg.mix(msg)	# Returning messages, merging them to msg object
+					continue
+				elif r in checked:
+					continue
+				elif r in romlistzip:
+					extracted = a.extract(r,tmppath)
+					self.__checkSHA1__(extracted, 'roms', 'rom_name', 'rom_sha1')
+					os.remove(os.path.join(tmppath,r))
 				else:
-					self.msg.add(r, "Rom not present at zip file", spool='error')
-			checked.append (r)
+					romstatus = self.__romstatus__ (r)
+					if romstatus != None:
+						self.msg.add(r, f"Rom not present at zip file: rom with {romstatus} status : (Warning)",)	
+					else:
+						self.msg.add(r, "Rom not present at zip file", spool='error')
+				checked.append (r)
+		else:
+			self.msg.add('ROM ZIP', f'File rom in ZIP not found {self.name}', spool='error')
 		return checked, self.msg
 
 	def __romstatus__ (self, rom_name):
@@ -1175,7 +1176,7 @@ if __name__ == '__main__':
 		warninglist.append (f"I can't find the xml file:(--xml {xmlfile})")
 	if itemcheck(chdspath) 	!= "folder":
 		warninglist.append (f"I can't find the chds folder:(--chds {chdspath})")
-		chdspath = None
+		chdspath = os.path.join(rsetpath,'chds')
 	if itemcheck(cheatpath)	!= "folder":
 		warninglist.append (f"I can't find the cheats folder:(--cheat {cheatpath})")
 		cheatpath = None
