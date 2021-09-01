@@ -124,114 +124,140 @@ class Messages ():
 			self.add(msg.name,f"({' : '.join(list(i))})", spool='error')
 
 def createSQL3 (xmlfile):
+	Table = dict()
+	field_table = namedtuple ('table',['Tagg','Txt','Attrib','Tablename','Fieldstype','Dependant'])
 	### Wich tags are retrieved from XML
-	# There are 3 tables: 
+	# There are 5 tables: 
 	# 	one table for game information 		(there is only one value for the game)
 	#	one table for file rom information	(there are some values for a game)
 	#	one table for device rom information(there are some values for a game)
-	#	one table for damples rom information(there are some values for a game)
+	#	one table for samples rom information(there are some values for a game)
+	# 	one table for CHDs information (there are some CHDs for a game)
 
-	# for Gametable, define which tags contains attributes to fetch
+	# for each table, define which tags, attrib, text contains data to fetch from the XML
 	# it will find attributes in this tags: <tag attribute=value/>
-	gtTagg = ("game","display","driver")
-	# for Gametable, define which tags contains Text to fetch
-	# it will find this tags and retrieve their text value : <tag>text</tag>
-	gtTxt  = ("description","year","manufacturer")
-
-	gamefields = {
-			"name": None,
-			"sourcefile": None,
-			"cloneof": None,
-			"romof": None,
-			"isbios": None,
-			"isdevice": None,
-			"ismechanical": None,
-			"runnable": None,
-			"description": None,
-			"year": None,
-			"manufacturer": None,
-			"type": None,
-			"rotate": None,
-			"status": None,
-			"emulation": None,
-			"color": None,
-			"sound": None,
-			"graphic": None,
-			"savestate": None,
-		}
-
-	gamefields_type = {
-			"name": 			("name"			,"char", "NOT NULL PRIMARY KEY"),
-			"sourcefile": 		("sourcefile"	,"char", ""),
-			"cloneof":  		("cloneof"		,"char", ""),
-			"romof":  			("romof"		,"char", ""),
-			"isbios": 			("isbios"		,"bool", ""),
-			"isdevice":			("isdevice"		,"bool", ""),
-			"ismechanical":		("ismechanical"	,"bool", ""),
-			"runnable":			("runnable"		,"bool", ""),
-			"description":  	("description"	,"char", ""),
-			"year":				("year"			,"char" , ""),
-			"manufacturer":  	("manufacturer"	,"char", ""),
-			"type":  			("display_type"	,"char", ""),
-			"rotate":			("display_rotate"	,"char" , ""),
-			"status":  			("driver_status"	,"char", ""),
-			"emulation":  		("driver_emulation"	,"char", ""),
-			"color":  			("driver_color"		,"char", ""),
-			"sound":  			("driver_sound"		,"char", ""),
-			"graphic":  		("driver_graphic"	,"char", ""),
-			"savestate":  		("driver_savestate"	,"char", ""),
-		}
+	# table name on the SQL, and related fields and types.
+	# Also informs if a table is dependant of the main game table.
+	 
+	Table ['games'] = field_table (
+		Tagg	=("game","display","driver"),
+		Txt		=("description","year","manufacturer"),
+		Attrib	={
+				"name": None,
+				"sourcefile": None,
+				"cloneof": None,
+				"romof": None,
+				"isbios": None,
+				"isdevice": None,
+				"ismechanical": None,
+				"runnable": None,
+				"description": None,
+				"year": None,
+				"manufacturer": None,
+				"type": None,
+				"rotate": None,
+				"status": None,
+				"emulation": None,
+				"color": None,
+				"sound": None,
+				"graphic": None,
+				"savestate": None,
+				},
+		Tablename		= 'games',
+		Dependant 		= False,
+		Fieldstype	= {
+				"name": 			("name"			,"char", "NOT NULL PRIMARY KEY"),
+				"sourcefile": 		("sourcefile"	,"char", ""),
+				"cloneof":  		("cloneof"		,"char", ""),
+				"romof":  			("romof"		,"char", ""),
+				"isbios": 			("isbios"		,"bool", ""),
+				"isdevice":			("isdevice"		,"bool", ""),
+				"ismechanical":		("ismechanical"	,"bool", ""),
+				"runnable":			("runnable"		,"bool", ""),
+				"description":  	("description"	,"char", ""),
+				"year":				("year"			,"char" , ""),
+				"manufacturer":  	("manufacturer"	,"char", ""),
+				"type":  			("display_type"	,"char", ""),
+				"rotate":			("display_rotate"	,"char" , ""),
+				"status":  			("driver_status"	,"char", ""),
+				"emulation":  		("driver_emulation"	,"char", ""),
+				"color":  			("driver_color"		,"char", ""),
+				"sound":  			("driver_sound"		,"char", ""),
+				"graphic":  		("driver_graphic"	,"char", ""),
+				"savestate":  		("driver_savestate"	,"char", ""),
+				},
+	)
 
 	# for Rom Table, define which tags contains attributes to fetch
-	rtTagg = ("rom",)
-
-	romsfields = {
-			"name": None,
-			"size": None,
-			"crc": None,
-			"sha1": None,
-			"status": None ,
-			"optional": None,
-		}
-	romsfields_type = {
-			"name": 			("rom_name"			,"char", "NOT NULL"),
-			"size": 			("rom_size"			,"int" , ""),
-			"crc":	 			("rom_crc"			,"char", ""),
-			"sha1": 			("rom_sha1"			,"char", ""),
-			"status":			("rom_status"		,"char", ""),
-			"optional":			("rom_optional"		,"char", ""),
-		}
+	Table ['roms'] = field_table (
+		Tagg	=("rom",),
+		Txt		=(),
+		Attrib	={
+				"name": None,
+				"size": None,
+				"crc": None,
+				"sha1": None,
+				"status": None ,
+				"optional": None,
+				},
+		Tablename		= 'roms',
+		Dependant 		= True,
+		Fieldstype	= {
+				"name": 			("rom_name"			,"char", "NOT NULL"),
+				"size": 			("rom_size"			,"int" , ""),
+				"crc":	 			("rom_crc"			,"char", ""),
+				"sha1": 			("rom_sha1"			,"char", ""),
+				"status":			("rom_status"		,"char", ""),
+				"optional":			("rom_optional"		,"char", ""),
+				},
+	)	
 
 	# for device Table, define which tags contains attributes to fetch
-	dtTagg = ("device_ref",)
-
-	devsfields = 		{"name": None,}
-	devsfields_type = 	{"name":	("dev_name", "char", "NOT NULL"),}	
-
+	Table ['devs'] = field_table (
+		Tagg	=("device_ref",),
+		Txt		=(),
+		Attrib	={
+				"name": None,
+				},
+		Tablename		= 'devs',
+		Dependant 		= True,
+		Fieldstype	= {
+				"name":	("dev_name", "char", "NOT NULL"),				},
+	)
 	# for disks Table, define which tags contains attributes to fetch
-	ktTagg = ("disk",)
-	
-	diskfields = 		{
-						"name": None,
-						"sha1": None,
-						"region": None,
-						"index" : None,
-						"writable": None,
-						}
-	diskfields_type = 	{
-						"name":		("dsk_name", "char", "NOT NULL"),
-						"sha1": 	("dsk_sha1", "char", ""),
-						"region":	("dsk_region", "char", ""),
-						"index":	("dsk_index", "char", ""),
-						"writable":	("dsk_writable", "char", ""),
-						}	
+	Table ['disks'] = field_table (
+		Tagg	=("disk",),
+		Txt		=(),
+		Attrib	={
+				"name": None,
+				"sha1": None,
+				"region": None,
+				"index" : None,
+				"writable": None,
+				},
+		Tablename		= 'disks',
+		Dependant 		= True,
+		Fieldstype	= {
+				"name":		("dsk_name", "char", "NOT NULL"),
+				"sha1": 	("dsk_sha1", "char", ""),
+				"region":	("dsk_region", "char", ""),
+				"index":	("dsk_index", "char", ""),
+				"writable":	("dsk_writable", "char", ""),
+				}
+	)
 
 	# for samples Table, define which tags contains attributes to fetch
-	spTagg = ("sample",)
-
-	splsfields = 		{"name": None,}
-	splsfields_type = 	{"name":	("spl_name", "char", "NOT NULL"),}	
-
+	Table ['samples'] = field_table (
+		Tagg	=("sample",),
+		Txt		=(),
+		Attrib	={
+				"name": None,
+				},
+		Tablename		= 'samples',
+		Dependant 		= True,
+		Fieldstype	= {
+				"name":	("spl_name", "char", "NOT NULL"),				},
+	)
 
 	class Readxmlline:
 		def __t2dtags__ (self, txt):
@@ -288,11 +314,11 @@ def createSQL3 (xmlfile):
 		def __init__ (self,con):
 			self.con = con
 			# Init game and roms data table fields
-			self.gf 	= gamefields.copy ()
-			self.__rf__ = romsfields.copy ()
-			self.__df__ = devsfields.copy ()
-			self.__kf__ = diskfields.copy ()
-			self.__sp__ = splsfields.copy ()
+			self.gf		= Table["games"].Attrib.copy()
+			self.__rf__ = Table["roms"].Attrib.copy()
+			self.__df__ = Table["devs"].Attrib.copy()
+			self.__kf__ = Table["disks"].Attrib.copy()
+			self.__sp__ = Table["samples"].Attrib.copy()
 			self.rflist = []
 			self.dflist = []
 			self.kflist = []
@@ -312,72 +338,63 @@ def createSQL3 (xmlfile):
 						return yes_no[value.lower()]
 				return None
 			# for game data
-			for i in gamefields_type:
-				if gamefields_type[i][1] == 'int':
+			# for i in gamefields_type:
+			for i in Table["games"].Fieldstype:
+				if Table["games"].Fieldstype[i][1] == 'int':
 					self.gf[i] = int(self.gf[i])
-				elif gamefields_type[i][1] == 'bool':
+				elif Table["games"].Fieldstype[i][1] == 'bool':
 					self.gf[i] = tobool (self.gf[i])
 			# for roms data
 			newlist = []
 			for j in self.rflist:
 				newdict = j[1].copy()
-				for i in romsfields_type:
-					if romsfields_type[i][1] == 'int':
+				for i in Table["roms"].Fieldstype:
+					if Table["roms"].Fieldstype[i][1] == 'int':
 						newdict[i] = int(newdict[i])
-					elif romsfields_type[i][1] == 'bool':
+					elif Table["roms"].Fieldstype[i][1] == 'bool':
 						newdict[i] = tobool(newdict[i])
 				newlist.append ((j[0],newdict))
 			self.rflist = newlist.copy()
-			# for devs data
-			newlist = []
-			for j in self.dflist:
-				newdict = j[1].copy()
-				for i in devsfields_type:
-					if devsfields_type[i][1] == 'int':
-						newdict[i] = int(newdict[i])
-					elif devsfields_type[i][1] == 'bool':
-						newdict[i] = tobool(newdict[i])
-				newlist.append ((j[0],newdict))
-			self.dflist = newlist.copy()
 
 		def adddata (self,data):
 			""" adds data for the game, data is a tuple from the XML extractor, (see Readxmlline class)
 			(tagg, attr,text )
 				"""
 			# adding GameTable with attributes taggs
-			if data[0] in gtTagg and data[1]!=None:
+			if data[0] in Table["games"].Tagg and data[1]!=None:
 				# reading attr from input dict
-				for i in gamefields:
+				for i in Table["games"].Fieldstype:
 					if i in data[1]:
 						self.gf[i] = data[1].get(i)
 			# adding GameTable Tag with text
-			if data[0] in gtTxt:
+			if data[0] in Table["games"].Txt:
 				self.gf[data[0]]=data[2]
+			
 			# adding RomTable with attributes taggs
-			if data[0] in rtTagg and data[1]!=None:
+			if data[0] in Table["roms"].Tagg and data[1]!=None:
 				# reading attr from input dict
-				for i in romsfields:
+				for i in Table["roms"].Fieldstype:
 					if i in data[1]:
 						self.__rf__[i] = data[1].get(i)
 				self.rflist.append ((self.gf['name'], self.__rf__.copy() ))
 			# adding devTable with attributes taggs
-			if data[0] in dtTagg and data[1]!=None:
+			if data[0] in Table["devs"].Tagg and data[1]!=None:
 				# reading attr from input dict
-				for i in devsfields:
+				for i in Table["devs"].Fieldstype:
 					if i in data[1]:
 						self.__df__[i] = data[1].get(i)
 				self.dflist.append ((self.gf['name'], self.__df__.copy() ))
 			# adding dskTable with attributes taggs
-			if data[0] in ktTagg and data[1]!=None:
+			if data[0] in Table["disks"].Tagg and data[1]!=None:
 				# reading attr from input dict
-				for i in diskfields:
+				for i in Table["disks"].Fieldstype:
 					if i in data[1]:
 						self.__kf__[i] = data[1].get(i)
 				self.kflist.append ((self.gf['name'], self.__kf__.copy() ))
 			# adding splTable with attributes taggs
-			if data[0] in spTagg and data[1]!=None:
+			if data[0] in Table["samples"].Tagg and data[1]!=None:
 				# reading attr from input dict
-				for i in splsfields:
+				for i in Table["samples"].Fieldstype:
 					if i in data[1]:
 						self.__sp__[i] = data[1].get(i)
 				self.splist.append ((self.gf['name'], self.__sp__.copy() ))
@@ -387,34 +404,34 @@ def createSQL3 (xmlfile):
 				"""
 			self.__datatypeparser__()
 			# game table:
-			fields = ",".join([gamefields_type[i][0] for i in self.gf])
+			fields = ",".join([Table["games"].Fieldstype[i][0] for i in self.gf])
 			values = [i for i in self.gf.values()]
 			questions = ",".join("?"*len(self.gf))
 			con.execute(f"INSERT INTO games ({fields}) VALUES ({questions})", values)
 			# roms table
 			for r in self.rflist:
-				fields = ",".join([romsfields_type[i][0] for i in r[1]]) + ",name"
+				fields = ",".join([Table["roms"].Fieldstype[i][0] for i in r[1]]) + ",name"
 				values = [i for i in r[1].values()]
 				values.append (r[0]) # append key field with game name to the list
 				questions = ",".join("?"*len(r[1])) + ",?"
 				con.execute(f"INSERT INTO roms ({fields}) VALUES ({questions})", values)
 			# devs table
 			for r in self.dflist:
-				fields = ",".join([devsfields_type[i][0] for i in r[1]]) + ",name"
+				fields = ",".join([Table["devs"].Fieldstype[i][0] for i in r[1]]) + ",name"
 				values = [i for i in r[1].values()]
 				values.append (r[0]) # append key field with game name to the list
 				questions = ",".join("?"*len(r[1])) + ",?"
 				con.execute(f"INSERT INTO devs ({fields}) VALUES ({questions})", values)
 			# disk table
 			for r in self.kflist:
-				fields = ",".join([diskfields_type[i][0] for i in r[1]]) + ",name"
+				fields = ",".join([Table["disks"].Fieldstype[i][0] for i in r[1]]) + ",name"
 				values = [i for i in r[1].values()]
 				values.append (r[0]) # append key field with game name to the list
 				questions = ",".join("?"*len(r[1])) + ",?"
 				con.execute(f"INSERT INTO disks ({fields}) VALUES ({questions})", values)
 			# samples table
 			for r in self.splist:
-				fields = ",".join([splsfields_type[i][0] for i in r[1]]) + ",name"
+				fields = ",".join([Table["samples"].Fieldstype[i][0] for i in r[1]]) + ",name"
 				values = [i for i in r[1].values()]
 				values.append (r[0]) # append key field with game name to the list
 				questions = ",".join("?"*len(r[1])) + ",?"
@@ -436,14 +453,14 @@ def createSQL3 (xmlfile):
 	con = sqlite3.connect (dbpath) # it creates one if file doesn't exists
 	cursor = con.cursor() # object to manage queries
 	# game table
-	tablefields = ",".join( [i[0]+" "+i[1]+" "+i[2] for i in gamefields_type.values()]) 
+	tablefields = ",".join( [i[0]+" "+i[1]+" "+i[2] for i in Table["games"].Fieldstype.values()])
 	cursor.execute (f'CREATE TABLE games ({tablefields})')
 	# creating dependant tables
 	for t,f in (
-			('roms', 	romsfields_type.values()	),
-			('devs', 	devsfields_type.values()	),
-			('disks', 	diskfields_type.values()	),
-			('samples', splsfields_type.values()	),
+			('roms', 	Table["roms"].Fieldstype.values()		),
+			('devs', 	Table["devs"].Fieldstype.values()		),
+			('disks', 	Table["disks"].Fieldstype.values()		),
+			('samples', Table["samples"].Fieldstype.values()	),
 			):
 		tablefields = "name, " + ",".join( [i[0]+" "+i[1]+" "+i[2] for i in f]) 
 		cursor.execute (f'CREATE TABLE {t} ({tablefields})')
