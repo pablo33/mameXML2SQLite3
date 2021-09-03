@@ -115,6 +115,17 @@ class Messages ():
 				print (txt)
 			print ('\n')
 
+	def Resumelist (self, notice = ''):
+		""" Prints a resume of errors / warnings
+			"""
+		print (notice)
+		if len (self.Emsg) > 0:
+			self.Emsglist(notice='Errors encountered')
+		elif len (self.Wmsg) > 0:
+			self.Wmsglist(notice='Warnings encountered')
+		else:
+			print ("All OK!")
+	
 	def mix (self, msg):
 		""" Mixes another msg spool object into this
 			"""
@@ -578,11 +589,6 @@ def createSQL3 (xmlfile):
 			""" Write data to Database
 				"""
 			self.__datatypeparser__()
-			"""
-			if self.Gdata["games"]['name'] == None:
-				print ("No name for the game... bypassing")
-				return 
-			"""
 			for T in Table.keys():
 				if not Table[T].Dependant:
 					fields = ",".join([Table[T].Fieldstype[i][0] for i in self.Gdata[T]])
@@ -671,7 +677,7 @@ class Bios:
 		cursor = self.con.execute ("SELECT name,description FROM games WHERE isbios = 1")
 		for b in cursor:
 			self.copybios (b[0])
-		self.msg.Emsglist(notice='Errors encountered')
+		self.msg.Resumelist(notice='Resume')
 
 	def copybios (self,biosname):
 		""" copy a bios from romset to bios folder
@@ -717,7 +723,7 @@ class Rom:
 		if itemcheck(romspath) != "folder":
 			print (f"creating roms folder at: {romspath}")
 			os.makedirs (romspath)
-		romheads = con.execute (f'SELECT name,cloneof,romof, isbios FROM games WHERE name = "{romname}"').fetchone()
+		romheads = self.con.execute (f'SELECT name,cloneof,romof, isbios FROM games WHERE name = "{romname}"').fetchone()
 		self.stuff = {
 			'snap'		: (snappath,	'snap',		'.*'),
 			'cheat'		: (cheatpath,	'cheat',	'.xml'),
@@ -732,6 +738,7 @@ class Rom:
 			self.devices = None
 			self.maingame, self.bios = None, None
 			self.chdgamedir = None
+			self.hasroms = None
 		else:
 			self.name, self.cloneof, self.romof, self.isbios = romheads
 			self.origin	= check (romname, romsetpath)
@@ -739,6 +746,16 @@ class Rom:
 			self.devices = self.__deviceslist__()
 			self.maingame, self.bios = self.__maingame__ ()
 			self.chdgamedir = os.path.join (romspath, self.maingame)
+			self.hasroms = self.__hasroms__()  # True or False if this rom-game has related roms
+
+	def __hasroms__(self):
+		""" Indicates if this game-rom has relted roms.
+			It is intended to distinguish devices wich has no roms
+			"""
+		myset = self.__fileromset__ (self.name, "roms", "rom_name")
+		if len (myset) == 0:
+			return False
+		return True
 
 	def removerom (self):
 		""" removes a rom file from the custom rom folder
@@ -843,6 +860,8 @@ class Rom:
 			# Zip file doesn't exist
 			return False
 		devromset 	= self.__fileromset__ (source,'roms','rom_name')
+		if len(devromset) == 0:
+			return True
 		if devromset in zipfileset:
 			self.msg.add (f'roms in {self.dest[0]}',"files are already in the zip file")
 			return
@@ -910,6 +929,9 @@ class Rom:
 
 		sqldigest  = self.con.execute (f"SELECT {hashfield} FROM {table} WHERE name = '{self.name}' AND {romfield} = '{file_name}'").fetchone()
 		if sqldigest == None:
+			return True
+		if sqldigest[0]==None:
+			self.msg.add(file_name, f"\tsha1 not found on Database: {file}")
 			return True
 		if itemcheck (file) == 'file':
 			filename = os.path.basename(file)
@@ -986,7 +1008,7 @@ class Rom:
 			Checks for the SHA1 for the files, bios and parents games is it is a clone.
 			-TODO: devices
 			"""
-		if self.name == None:
+		if self.name == None or not self.hasroms:
 			return
 		self.msg = Messages(self.name)
 		print (f"Checking files for {self.name}")
@@ -1011,13 +1033,12 @@ class Rom:
 			print ('>Checking devices:')
 			self.__checkdevices__()
 			
-		self.msg.Emsglist(notice='Some errors where ecountered:')
+		self.msg.Emsglist(notice='Errors encountered:')
 		return self.msg
 
 	def __identifile__ (self, path, fileext):
 		filelist = glob(os.path.join(path,self.name + fileext))
 		if len (filelist) > 0:
-			print (f"Selected: {filelist[0]}")
 			return os.path.join(filelist[0])
 		return None
 
@@ -1029,10 +1050,14 @@ class Rom:
 			"""
 		for i in self.stuff:
 			originpath, destpath, filetype = self.stuff[i]
+			# Overriding inexistent origin folders
 			if originpath == None:
 				continue
+			# Overriding games with no samples 
+			if i == 'samples' and len (self.__fileromset__(self.name, i, 'spl_name')) == 0:
+				continue
 			unzip = False
-			print (f"attaching {i}")
+			print (f"{self.name} attaching {i}")
 			origin = self.__identifile__(originpath, filetype)
 			if origin == None:
 				origin = os.path.join(originpath,destpath)+'.zip' # search for a zip file
@@ -1063,6 +1088,7 @@ class Rom:
 			dest = self.__identifile__(destpath, filetype)
 			if dest != None:
 				if itemcheck (dest) == 'file':
+					self.msg.add(i, "Deleted")
 					os.remove(dest)
 
 class Romset:
@@ -1401,11 +1427,13 @@ if __name__ == '__main__':
 		elif action == "2":
 			romname = Romset(con).chooserom ()
 			if romname:
-				Rom (con, romname).copyrom()
+				msg = Rom (con, romname).copyrom()
+				msg.Resumelist(notice=f"=== Resume for {romname} ===")
 		elif action == "3":
 			romname = Romset(con).chooserom ()
 			if romname:
-				Rom (con, romname).removerom()
+				msg = Rom (con, romname).removerom()
+				msg.Resumelist(notice=f"=== Resume for {romname} ===")
 		elif action == "4":
 			Romset (con).games2csv()
 		elif action == "5":
