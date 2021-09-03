@@ -118,10 +118,11 @@ class Messages ():
 	def mix (self, msg):
 		""" Mixes another msg spool object into this
 			"""
-		for i in msg.Wmsg:
-			self.add(msg.name,f"({' : '.join(list(i))})")
-		for i in msg.Emsg:
-			self.add(msg.name,f"({' : '.join(list(i))})", spool='error')
+		if msg != None:
+			for i in msg.Wmsg:
+				self.add(msg.name,f"({' : '.join(list(i))})")
+			for i in msg.Emsg:
+				self.add(msg.name,f"({' : '.join(list(i))})", spool='error')
 
 def createSQL3 (xmlfile):
 
@@ -577,7 +578,11 @@ def createSQL3 (xmlfile):
 			""" Write data to Database
 				"""
 			self.__datatypeparser__()
-			# game table:
+			"""
+			if self.Gdata["games"]['name'] == None:
+				print ("No name for the game... bypassing")
+				return 
+			"""
 			for T in Table.keys():
 				if not Table[T].Dependant:
 					fields = ",".join([Table[T].Fieldstype[i][0] for i in self.Gdata[T]])
@@ -623,12 +628,13 @@ def createSQL3 (xmlfile):
 	fh = open(xmlfile)
 	gamecount = 0
 	game = Game(con)
+	gameretrieve = True  # Forces the closing of a game when a new game tagg is found
 	print ("Scanning XML and poblating database")
 	for i in fh:
 		line = Readxmlline(i)
-		if line.data()[0]!= None:	
+		if line.data()[0]!= None:
 			game.adddata(line.data())
-		if line.clos and line.tagg == Table["games"].Tagg[1]:
+		if line.clos and line.tagg == Table["games"].Tagg[0]:
 			# Closing current game and writting data to Database
 			game.write2db() # write game to db
 			gamecount += 1
@@ -1064,6 +1070,7 @@ class Romset:
 		""" Represents the romset at the database
 			"""
 		self.con = con	# connection to SQLite3 Database
+		self.availableactions = ("add","remove","check")
 		self.myCSVfile = "gamelist.csv"
 		# For CSV generation and read
 		self.addedcolumns = ['action']
@@ -1112,7 +1119,8 @@ class Romset:
 				writer.writerow (data)
 		print ("Done.")
 		print (f"You can edit {self.myCSVfile} file with a spreadsheet and set actions on 'action' column.")
-		print ("Available actions are: add and remove")
+		a = ", ".join(self.availableactions[:-1]) + " and " + self.availableactions[-1]
+		print ("Available actions are: ", a)
 
 	def processCSVlist (self):
 		""" Proccess CSV file with the gamelist and searchs and execute actions.
