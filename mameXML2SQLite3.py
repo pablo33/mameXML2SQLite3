@@ -1188,9 +1188,6 @@ class Romset:
 					postkey = None
 					if datadict ['action'].lower() in ('add','remove', 'check'):
 						postkey = self.__dofileaction__ (datadict['action'].lower(), datadict['name'])
-					elif datadict ['action'] not in ('added','removed','checked-OK','checked-ERROR','error','unknown action',''):
-						postkey = 'unknown action'
-					if postkey:
 						print (f"{datadict['name']}: {postkey}")
 						datadict ['action'] = postkey
 					writer.writerow (rowdict=datadict)
