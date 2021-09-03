@@ -1148,13 +1148,7 @@ class Romset:
 		a = ", ".join(self.availableactions[:-1]) + " and " + self.availableactions[-1]
 		print ("Available actions are: ", a)
 
-	def processCSVlist (self):
-		""" Proccess CSV file with the gamelist and searchs and execute actions.
-			actions are stored as text on 'action' column, and for now current actions are:
-				add		: to add a game from the romset to the custom rom folder
-				delete	: to delete a game-rom from the custom rom folder.
-				check	: to check a rom-game files, chds, integrity.
-			"""
+	def __check_gamelist__ (self):
 		if itemcheck (self.myCSVfile) != 'file':
 			print (f"There is no game list: ({self.myCSVfile}).")
 			r = input ("do you want to generate one? (y/n)")
@@ -1162,6 +1156,16 @@ class Romset:
 				self.games2csv()
 			else:
 				return
+
+	def processCSVlist (self):
+		""" Proccess CSV file with the gamelist and searchs and execute actions.
+			actions are stored as text on 'action' column, and for now current actions are:
+				add		: to add a game from the romset to the custom rom folder
+				delete	: to delete a game-rom from the custom rom folder.
+				check	: to check a rom-game files, chds, integrity.
+			"""
+		# Checking if gamelist file exists
+		self.__check_gamelist__()
 		# process CSV
 		csvtmpfile = self.myCSVfile + '.tmp'
 		with open (self.myCSVfile, 'r', newline='') as csvfile:
@@ -1247,6 +1251,43 @@ class Romset:
 				print (f'{counter:<3} - {i[0]}\t,{i[1][:80]}')
 			if counter == 0:
 				print ("No candidates found, try to enter a word on his description.")
+	
+	def Updatecsv (self):
+		""" Update gamelist.csv with the roms in your custom ROMs folder
+			Just cleans 'action' column and put 'Have' on the games that you have in your custom rom folder.  
+			"""
+		msg = Messages('Custom Roms folder')
+		# Checking if gamelist file exists
+		self.__check_gamelist__()
+		# process CSV
+		csvtmpfile = self.myCSVfile + '.tmp'
+		with open (self.myCSVfile, 'r', newline='') as csvfile:
+			reader = csv.DictReader (csvfile, dialect='excel-tab')
+			with open (csvtmpfile, 'w', newline='') as tmp:
+				writer = csv.DictWriter(tmp, reader.fieldnames, dialect='excel-tab')	# Outtput file
+				line = 0
+				for r in reader:
+					line += 1
+					if line == 1:
+						writer.writeheader()
+						continue
+					datadict = r
+					game_rom = datadict ['name']
+					exists = Rom(self.con,game_rom).dest[1]
+					if exists == None:
+						datadict['action']='Missed'
+						msg.add (game_rom,'This game do not exists in this Romset')
+						print (line,'Missed')
+					elif exists: 
+						datadict['action']='Have'
+						print (line,'Have')
+					else:
+						datadict['action']=''
+					writer.writerow (rowdict=datadict)
+		os.remove (self.myCSVfile)
+		shutil.move	(csvtmpfile, self.myCSVfile)
+		print ("Done!")
+		return msg
 
 class Bestgames:
 	""" Best games list by progetto, adds a score to the roms.
@@ -1417,6 +1458,7 @@ if __name__ == '__main__':
 			"6": "Add bestgames.ini information to database",
 			"7": "Check a game romset for file integrity (roms and related parents, bios, chds, devices)",
 			"8": "Move all bios files from Custom Romset to Bios folder",
+			"9": "Mark games at your custom roms folder in gamelist.csv",
 			}
 		print ('\n')
 		for o in user_options:
@@ -1438,6 +1480,8 @@ if __name__ == '__main__':
 			Romset (con).games2csv()
 		elif action == "5":
 			Romset (con).processCSVlist()
+		elif action == "9":
+			Romset (con).Updatecsv()
 		elif action == "6":
 			Bestgames (con, bgfile).addscores()
 		elif action == "7":
