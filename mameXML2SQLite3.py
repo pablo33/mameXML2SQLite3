@@ -1155,7 +1155,7 @@ class Romset:
 			if r.lower() in ('y','yes'):
 				self.games2csv()
 			else:
-				return
+				return False
 
 	def processCSVlist (self):
 		""" Proccess CSV file with the gamelist and searchs and execute actions.
@@ -1165,7 +1165,8 @@ class Romset:
 				check	: to check a rom-game files, chds, integrity.
 			"""
 		# Checking if gamelist file exists
-		self.__check_gamelist__()
+		if not self.__check_gamelist__():
+			return
 		# process CSV
 		csvtmpfile = self.myCSVfile + '.tmp'
 		with open (self.myCSVfile, 'r', newline='') as csvfile:
@@ -1258,7 +1259,8 @@ class Romset:
 			"""
 		msg = Messages('Custom Roms folder')
 		# Checking if gamelist file exists
-		self.__check_gamelist__()
+		if not self.__check_gamelist__():
+			return
 		# process CSV
 		csvtmpfile = self.myCSVfile + '.tmp'
 		with open (self.myCSVfile, 'r', newline='') as csvfile:
