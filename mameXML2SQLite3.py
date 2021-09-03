@@ -1009,7 +1009,7 @@ class Rom:
 			-TODO: devices
 			"""
 		if self.name == None or not self.hasroms:
-			return
+			return self.msg
 		self.msg = Messages(self.name)
 		print (f"Checking files for {self.name}")
 		
@@ -1100,7 +1100,8 @@ class Romset:
 		self.myCSVfile = "gamelist.csv"
 		# For CSV generation and read
 		self.addedcolumns = ['action']
-		self.retrievefields = [	'name',
+		self.retrievefields = [	
+							'name',
 							'description',
 							'cloneof',
 							'chd',
@@ -1110,6 +1111,8 @@ class Romset:
 							'display_rotate',
 							'driver_savestate',
 							'driver_emulation',
+							'isbios',
+							'isdevice',
 							]
 		if Bestgames(self.con,bgfile).checkfield():
 			self.retrievefields += ['score']
@@ -1154,9 +1157,11 @@ class Romset:
 			r = input ("do you want to generate one? (y/n)")
 			if r.lower() in ('y','yes'):
 				self.games2csv()
+				return True
 			else:
 				return False
-
+		return True
+	
 	def processCSVlist (self):
 		""" Proccess CSV file with the gamelist and searchs and execute actions.
 			actions are stored as text on 'action' column, and for now current actions are:
