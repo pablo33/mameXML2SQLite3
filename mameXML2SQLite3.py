@@ -1066,6 +1066,9 @@ class Rom:
 					element = self.name + filetype
 					if element in ziplist:
  						unzip = True
+					else:
+						self.msg.add(f"{i}","No file found for the game")
+						continue	
 				else:
 					self.msg.add(f"{i}","No file found for the game")
 					continue
@@ -1076,7 +1079,7 @@ class Rom:
 			if itemcheck (destpath) != "folder":
 				os.mkdir(destpath)
 			if unzip:
-				zipfile.ZipFile(origin, mode='r').extract(element, destpath )
+				zipfile.ZipFile(origin, mode='r').extract(element, destpath)
 			else:
 				shutil.copyfile (origin, dest)
 	
