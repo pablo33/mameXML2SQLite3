@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 # -*- encoding: utf-8 -*-
 
-__version__ = "0.42"
+__version__ = "0.43"
 __author__  = "pablo33"
 __doc__		= """
 	This software helps you managing a Mame Romset.
@@ -702,7 +702,7 @@ class Bios:
 			if origin.exists == False:
 				continue
 			if dest.exists == True:
-				self.msg.add ({biosname[0]},"bios already exist on bios folder")
+				self.msg.add (biosname[0],"bios already exist on bios folder")
 				os.remove (origin.file)
 				continue
 			shutil.move (origin.file, dest.file)
