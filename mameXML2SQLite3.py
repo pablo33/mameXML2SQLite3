@@ -20,6 +20,7 @@ __doc__		= """
 """
 
 # Standard libray imports
+from genericpath import exists
 from io import DEFAULT_BUFFER_SIZE
 import os, argparse, sqlite3, re, shutil, zipfile, csv
 from hashlib import sha1
@@ -171,7 +172,7 @@ def createSQL3 (xmlfile):
 				if res != None:
 					tagg = res.group(1)
 					text = res.group(2)
-					clos = True		
+					clos = True
 				else:
 					# Search for </tags>
 					res = re.search ("</([^\"]*)>",l)
@@ -1098,12 +1099,24 @@ class Romset:
 	def __init__ (self, con):
 		""" Represents the romset at the database
 			"""
-		self.con = con	# connection to SQLite3 Database
+		self.con = con						# connection to SQLite3 Database
+		self.myCSVfile = "gamelist.csv"		
 		self.availableactions = ("add","remove","check")
-		self.myCSVfile = "gamelist.csv"
-		# For CSV generation and read
-		self.addedcolumns = ['action']
-		self.retrievefields = [	
+
+	def games2csv(self):
+		""" Generates a CSV file with the gamelist based on filters.
+			By default, without bios, or clones.
+			Filename: gamelist.csv
+			"""
+		if itemcheck (self.myCSVfile) == 'file':
+			print (f"There is already a game list: ({self.myCSVfile}).")
+			r = input ("I will replace it, do you want to continue? (y/n)")
+			if r.lower() not in ('y','yes'):
+				print ("Proccess cancelled.")
+				return
+			# For CSV generation and read
+		addedcolumns = ['action']
+		retrievefields = [	# Fields to retrieve from the DB.Table games
 							'name',
 							'description',
 							'cloneof',
@@ -1118,22 +1131,11 @@ class Romset:
 							'isdevice',
 							]
 		if Bestgames(self.con,bgfile).checkfield():
-			self.retrievefields += ['score']
-		self.headerlist = self.addedcolumns + self.retrievefields
+			retrievefields += ['score']
+		headerlist = addedcolumns + retrievefields
 
-	def games2csv(self):
-		""" Generates a CSV file with the gamelist based on filters.
-			By default, without bios, or clones.
-			Filename: gamelist.csv
-			"""
-		if itemcheck (self.myCSVfile) == 'file':
-			print (f"There is already a game list: ({self.myCSVfile}).")
-			r = input ("I will replace it, do you want to continue? (y/n)")
-			if r.lower() not in ('y','yes'):
-				print ("Proccess cancelled.")
-				return
 		#datadict = dict (list(zip(headerlist,['']*len(headerlist))))
-		retrievefields_comma = ','.join(self.retrievefields)	# for SQL Search
+		retrievefields_comma = ','.join(retrievefields)	# for SQL Search
 		cursor = self.con.execute (f'SELECT {retrievefields_comma} FROM \
 						games LEFT JOIN \
 		(SELECT name as dk_name, "yes" as chd from disks GROUP BY name) \
@@ -1145,7 +1147,7 @@ class Romset:
 								)
 		with open(self.myCSVfile, 'w', newline='') as csvfile:
 			writer = csv.writer (csvfile, dialect='excel-tab')
-			writer.writerow (self.headerlist)
+			writer.writerow (headerlist)
 			for r in cursor:
 				data = [''] + list(r)
 				writer.writerow (data)
@@ -1189,7 +1191,7 @@ class Romset:
 						continue
 					datadict = r
 					postkey = None
-					if datadict ['action'].lower() in ('add','remove', 'check'):
+					if datadict ['action'].lower() in self.availableactions:
 						postkey = self.__dofileaction__ (datadict['action'].lower(), datadict['name'])
 						print (f"{datadict['name']}: {postkey}")
 						datadict ['action'] = postkey
@@ -1265,7 +1267,8 @@ class Romset:
 		msg = Messages('Custom Roms folder')
 		# Checking if gamelist file exists
 		if not self.__check_gamelist__():
-			return
+			msg.add('UpdateCSV','There is no CSV file', spool='error')
+			return msg
 		# process CSV
 		csvtmpfile = self.myCSVfile + '.tmp'
 		with open (self.myCSVfile, 'r', newline='') as csvfile:
@@ -1279,15 +1282,10 @@ class Romset:
 						writer.writeheader()
 						continue
 					datadict = r
-					game_rom = datadict ['name']
-					exists = Rom(self.con,game_rom).dest[1]
-					if exists == None:
-						datadict['action']='Missed'
-						msg.add (game_rom,'This game do not exists in this Romset')
-						print (line,'Missed')
-					elif exists: 
+					game_rom = r['name']
+					if itemcheck (os.path.join(romspath, game_rom + romsext)) == 'file':
 						datadict['action']='Have'
-						print (line,'Have')
+						print (line, 'Have', game_rom)						
 					else:
 						datadict['action']=''
 					writer.writerow (rowdict=datadict)
@@ -1460,12 +1458,12 @@ if __name__ == '__main__':
 			"1": "Create a bios folder with all bios roms",
 			"2": "Search and copy a rom from Romset to custom Roms Folder",
 			"3": "Search and remove a rom from the custom Roms Folder",
-			"4": "Generate a games-list in CSV format (gamelist.csv)",
-			"5": "Proccess actions in games-list CSV file (gamelist.csv)",
-			"6": "Add bestgames.ini information to database",
-			"7": "Check a game romset for file integrity (roms and related parents, bios, chds, devices)",
-			"8": "Move all bios files from Custom Romset to Bios folder",
-			"9": "Mark games at your custom roms folder in gamelist.csv",
+			"4": "Check a game romset for file integrity (roms and related parents, bios, chds, devices)",
+			"5": "Add bestgames.ini information to database",
+			"6": "Generate a games-list in CSV format (gamelist.csv)",
+			"7": "Proccess actions in games-list CSV file (gamelist.csv)",
+			"8": "Mark games at your custom roms folder in gamelist.csv",
+			"9": "Move all bios files from Custom Romset to Bios folder",
 			}
 		print ('\n')
 		for o in user_options:
@@ -1484,18 +1482,18 @@ if __name__ == '__main__':
 				msg = Rom (con, romname).removerom()
 				msg.Resumelist(notice=f"=== Resume for {romname} ===")
 		elif action == "4":
-			Romset (con).games2csv()
-		elif action == "5":
-			Romset (con).processCSVlist()
-		elif action == "9":
-			Romset (con).Updatecsv()
-		elif action == "6":
-			Bestgames (con, bgfile).addscores()
-		elif action == "7":
 			romname = Romset(con).chooserom ()
 			if romname:
 				Rom (con, romname).checkrom()
+		elif action == "5":
+			Bestgames (con, bgfile).addscores()
+		elif action == "6":
+			Romset (con).games2csv()
+		elif action == "7":
+			Romset (con).processCSVlist()
 		elif action == "8":
+			Romset (con).Updatecsv()
+		elif action == "9":
 			Bios(con).movebios()
 		elif action == "":
 			print ("Done!")

@@ -8,7 +8,7 @@ tests
 mame.*
 romset*
 notes.ods
-gamelist.csv
+*.csv
 bestgames.ini
 stuff
 snap
@@ -17,7 +17,7 @@ cheat
 chds
 bios
 roms
-
+*.xml
 
 
 # Byte-compiled / optimized / DLL files
