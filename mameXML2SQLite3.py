@@ -22,7 +22,7 @@ __doc__		= """
 # Standard libray imports
 from genericpath import exists
 from io import DEFAULT_BUFFER_SIZE
-import os, argparse, sqlite3, re, shutil, zipfile, csv
+import os, argparse, sqlite3, re, shutil, zipfile, csv, configparser
 from hashlib import sha1
 from glob import glob
 from collections import namedtuple
@@ -664,6 +664,17 @@ def check (file, path):
 		return myfile (fullfilepath, True)
 	return myfile (fullfilepath, False)
 
+def checkfield (con, field):
+	""" Checks if a field is at database.
+		Returns True in case of found it.
+		"""
+	cursor = con.execute ("PRAGMA table_info(games)")
+	for i in cursor:
+		if i[1] == field:
+			return True
+	return False
+
+
 class Bios:
 	def __init__(self,con):
 		# check if bios folder is present
@@ -1130,8 +1141,10 @@ class Romset:
 							'isbios',
 							'isdevice',
 							]
-		if Bestgames(self.con,bgfile).checkfield():
-			retrievefields += ['score']
+		if Bestgames(self.con).isINdatabase:
+			retrievefields += [Bestgames(self.con).scorefield]
+		if Catver(self.con).isINdatabase:
+			retrievefields += [Catver(self.con).catverfield]
 		headerlist = addedcolumns + retrievefields
 
 		#datadict = dict (list(zip(headerlist,['']*len(headerlist))))
@@ -1299,25 +1312,22 @@ class Bestgames:
 		https://www.progettosnaps.net/bestgames/
 		current functions:
 		Adds registry to database.
-		Checks if there is a score field at database. 
 		"""	
-	def __init__(self, con, bgfile):
-		self.scorefield = 'score'
+	def __init__(self, con):
+		self.msg = Messages ('Bestgames')
 		self.con = con
-		self.bgfile = bgfile
-		self.isINdatabase = self.checkfield()
-	
-	def checkfield (self):
-		""" Checks if score field is at database.
-			Returns True in case of found it.
-			"""
-		cursor = self.con.execute ("PRAGMA table_info(games)")
-		for i in cursor:
-			if i[1] == self.scorefield:
-				return True
-		return False
-	
+		self.scorefield = 'score'
+		self.bgfile = 'bestgames.ini'
+		self.isINdatabase = checkfield(con, self.scorefield)
+		if itemcheck (self.bgfile) != 'file':
+			self.msg.add('bestgames.ini','file not found, you can download it from:\nhttps://www.progettosnaps.net/bestgames/', spool='error')
+			self.fileexists = False
+		else:
+			self.fileexists = True
+
 	def addscores (self):
+		if not self.fileexists:
+			return self.msg
 		if not self.isINdatabase:
 			# Adding score field to table
 			self.con.execute (f"ALTER TABLE games ADD {self.scorefield} char")
@@ -1362,6 +1372,62 @@ class Bestgames:
 			self.con.commit()
 		print (f"Database updated with {self.bgfile}")
 
+class Catver:
+	""" Category / Version list, adds a catver field for the game table
+		download latest catver.ini from Mamedats at
+		https://www.progettosnaps.net/catver/
+		current functions:
+		Adds registry to database.
+		"""
+	def __init__ (self, con):
+		self.msg = Messages ('catver.ini')
+		self.con = con
+		self.catverfield = 'catver'
+		self.catverfile = 'catver.ini'
+		self.isINdatabase = checkfield(con, self.catverfield)
+		if itemcheck (self.catverfile) != 'file':
+			self.msg.add('catver.ini','file not found, you can download it from:\nhttps://www.progettosnaps.net/catver/', spool='error')
+			self.fileexists = False
+		else:
+			self.fileexists = True
+
+	def addcatver(self):
+		""" Read catver.ini file and adds information to the database
+			"""
+		if not self.fileexists:
+			return self.msg
+		if not self.isINdatabase:
+			# Adding score field to table
+			self.con.execute (f"ALTER TABLE games ADD {self.catverfield} char")
+			self.con.commit()
+			self.isINdatabase = True
+		#Removing error on parsing lines (working on a .tmp file)
+		with open (self.catverfile, "r") as inifile:
+			with open (self.catverfile + '.tmp', "w") as newinifile:
+				for line in inifile:
+					if "=" in line or "[" in line:
+						newinifile.write (line)	
+		
+		#Reading and updating data:
+		catver = configparser.ConfigParser()
+		catver.read (self.catverfile + '.tmp')
+		if 'Category' not in catver.sections():
+			msg.add('[Category] section','No category section found', spool='error')
+			return msg
+		cursor = self.con.execute ("SELECT name FROM games")
+		commitcounter = 0
+		commitevery = 1000
+		for i in cursor:
+			game = i[0]
+			if game in catver['Category']:
+				self.con.execute (f"UPDATE games SET {self.catverfield} = '{catver['Category'][game]}' WHERE name = '{game}'")
+			commitcounter += 1
+			if commitcounter % commitevery == 0:
+				self.con.commit ()
+		self.con.commit()
+		os.remove(self.catverfile+'.tmp')
+		print (f"Database updated with {self.catverfile}")
+
 if __name__ == '__main__':
 	########################################
 	# Retrieve cmd line parameters
@@ -1385,9 +1451,8 @@ if __name__ == '__main__':
 						help="artwork snap folder")
 	parser.add_argument("-r", "--roms", default="roms",
 						help="roms folder path. Your custom rom folder.")
-	parser.add_argument("-bg", "--bestgames", default="bestgames.ini",
-						help="bestgames ini file by progetto.")
-						
+
+
 	args = parser.parse_args()
 
 	# Retrieving variables from args
@@ -1396,7 +1461,6 @@ if __name__ == '__main__':
 	romsetpath	= args.romset
 	biospath	= args.bios
 	romspath	= args.roms
-	bgfile		= args.bestgames
 		# defaults on romset dir
 	chdspath	= args.chds
 	samplespath	= args.samples
@@ -1411,8 +1475,6 @@ if __name__ == '__main__':
 		# Errors
 	if itemcheck(romsetpath)	!= "folder":
 		errorlist.append (f"I can't find romset folder:(--romset {romsetpath})")
-	if itemcheck (bgfile) != "file":
-		warninglist.append (f"I can't find bestgames file:(--bestgames {bgfile})")
 	if biospath == romsetpath:
 		errorlist.append (f'please, place bios folder out of your romset folder: {biospath}')
 	if romspath == romsetpath:
@@ -1460,10 +1522,11 @@ if __name__ == '__main__':
 			"3": "Search and remove a rom from the custom Roms Folder",
 			"4": "Check a game romset for file integrity (roms and related parents, bios, chds, devices)",
 			"5": "Add bestgames.ini information to database",
-			"6": "Generate a games-list in CSV format (gamelist.csv)",
-			"7": "Proccess actions in games-list CSV file (gamelist.csv)",
-			"8": "Mark games at your custom roms folder in gamelist.csv",
-			"9": "Move all bios files from Custom Romset to Bios folder",
+			"6": "Add catver.ini information to database",
+			"7": "Generate a games-list in CSV format (gamelist.csv)",
+			"8": "Proccess actions in games-list CSV file (gamelist.csv)",
+			"9": "Mark games at your custom roms folder in gamelist.csv",
+			"10": "Move all bios files from Custom Romset to Bios folder",
 			}
 		print ('\n')
 		for o in user_options:
@@ -1486,14 +1549,16 @@ if __name__ == '__main__':
 			if romname:
 				Rom (con, romname).checkrom()
 		elif action == "5":
-			Bestgames (con, bgfile).addscores()
+			Bestgames (con).addscores()
 		elif action == "6":
-			Romset (con).games2csv()
+			Catver (con).addcatver()
 		elif action == "7":
-			Romset (con).processCSVlist()
+			Romset (con).games2csv()
 		elif action == "8":
-			Romset (con).Updatecsv()
+			Romset (con).processCSVlist()
 		elif action == "9":
+			Romset (con).Updatecsv()
+		elif action == "10":
 			Bios(con).movebios()
 		elif action == "":
 			print ("Done!")
