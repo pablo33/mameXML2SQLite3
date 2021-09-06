@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 # -*- encoding: utf-8 -*-
 
-__version__ = "0.43"
+__version__ = "0.44"
 __author__  = "pablo33"
 __doc__		= """
 	This software helps you managing a Mame Romset.
@@ -44,6 +44,7 @@ class ValueNotExpected(ValueError):
 #=====================================
 romsext		= '.zip'
 rsetpath 	= 'romset'
+crsetpath	= 'customromset'
 artworkpath	= 'artwork'
 tmppath		= 'tmp'
 
@@ -223,7 +224,7 @@ def createSQL3 (xmlfile):
 
 	if xmlversion <=  162:	
 		Table ['games'] = field_table (
-			Tagg	=("game","display","driver"),
+			Tagg	=("game","display","driver","input"),
 			Txt		=("description","year","manufacturer"),
 			Attrib	=[
 					"name",
@@ -242,6 +243,9 @@ def createSQL3 (xmlfile):
 					"sound",
 					"graphic",
 					"savestate",
+					"players",
+					"buttons",
+					"coins",
 					],
 			Tablename		= 'games',
 			Fieldsdefaults	={
@@ -264,8 +268,11 @@ def createSQL3 (xmlfile):
 					"sound": None,
 					"graphic": None,
 					"savestate": None,
+					"players": None,
+					"buttons": None,
+					"coins": None,
 					},
-			Dependant 		= False,
+			Dependant 	= False,
 			Fieldstype	= {
 					"name": 			("name"			,"char", "NOT NULL PRIMARY KEY"),
 					"sourcefile": 		("sourcefile"	,"char", ""),
@@ -286,100 +293,14 @@ def createSQL3 (xmlfile):
 					"sound":  			("driver_sound"		,"char", ""),
 					"graphic":  		("driver_graphic"	,"char", ""),
 					"savestate":  		("driver_savestate"	,"char", ""),
+					"players":			("input_players"	,"char", ""),
+					"buttons":			("input_buttons"	,"chat", ""),
+					"coins":			("input_coins"		,"char", ""),
 					},
-		)
-		# for Rom Table, define which tags contains attributes to fetch
-		Table ['roms'] = field_table (
-			Tagg	=("rom",),
-			Txt		=(),
-			Attrib	=[
-					"name",
-					"size",
-					"crc",
-					"sha1",
-					"status" ,
-					"optional",
-					],
-			Tablename		= 'roms',
-			Fieldsdefaults	= {
-					"name": None,
-					"size": None,
-					"crc": None,
-					"sha1": None,
-					"status": None ,
-					"optional": None,
-					},
-			Dependant 		= True,
-			Fieldstype	= {
-					"name": 			("rom_name"			,"char", "NOT NULL"),
-					"size": 			("rom_size"			,"int" , ""),
-					"crc":	 			("rom_crc"			,"char", ""),
-					"sha1": 			("rom_sha1"			,"char", ""),
-					"status":			("rom_status"		,"char", ""),
-					"optional":			("rom_optional"		,"char", ""),
-					},
-		)	
-		# for device Table, define which tags contains attributes to fetch
-		Table ['devs'] = field_table (
-			Tagg	=("device_ref",),
-			Txt		=(),
-			Attrib	=[
-					"name",
-					],
-			Tablename		= 'devs',
-			Fieldsdefaults	= {
-					"name": None,
-					},
-			Dependant 		= True,
-			Fieldstype	= {
-					"name":	("dev_name", "char", "NOT NULL"),				},
-		)
-		# for disks Table, define which tags contains attributes to fetch
-		Table ['disks'] = field_table (
-			Tagg	=("disk",),
-			Txt		=(),
-			Attrib	=[
-					"name",
-					"sha1",
-					"region",
-					"index" ,
-					"writable",
-					],
-			Tablename		= 'disks',
-			Fieldsdefaults	= {
-					"name": None,
-					"sha1": None,
-					"region": None,
-					"index" : None,
-					"writable": None,
-					},
-			Dependant 		= True,
-			Fieldstype		= {
-					"name":		("dsk_name", "char", "NOT NULL"),
-					"sha1": 	("dsk_sha1", "char", ""),
-					"region":	("dsk_region", "char", ""),
-					"index":	("dsk_index", "char", ""),
-					"writable":	("dsk_writable", "char", ""),
-					}
-		)
-		# for samples Table, define which tags contains attributes to fetch
-		Table ['samples'] = field_table (
-			Tagg	= ("sample",),
-			Txt		= (),
-			Attrib	= [
-					"name",
-					],
-			Tablename		= 'samples',
-			Fieldsdefaults	= {
-					"name": None,
-					},
-			Dependant 		= True,
-			Fieldstype		= {
-					"name":	("spl_name", "char", "NOT NULL"),				},
 		)
 	else:
 		Table ['games'] = field_table (
-			Tagg	=("machine","display","driver"),
+			Tagg	=("machine","display","driver","input"),
 			Txt		=("description","year","manufacturer"),
 			Attrib	=[
 					"name",
@@ -395,6 +316,9 @@ def createSQL3 (xmlfile):
 					"status",
 					"emulation",
 					"savestate",
+					"players",
+					"buttons",
+					"coins",
 					],
 			Tablename		= 'games',
 			Fieldsdefaults	={
@@ -414,6 +338,9 @@ def createSQL3 (xmlfile):
 					"status": None,
 					"emulation": None,
 					"savestate": None,
+					"players": None,
+					"buttons": None,
+					"coins": None,
 					},
 			Dependant 		= False,
 			Fieldstype	= {
@@ -433,98 +360,139 @@ def createSQL3 (xmlfile):
 					"status":  			("driver_status"	,"char", ""),
 					"emulation":  		("driver_emulation"	,"char", ""),
 					"savestate":  		("driver_savestate"	,"char", ""),
+					"players":			("input_players"	,"char", ""),
+					"buttons":			("input_buttons"	,"chat", ""),
+					"coins":			("input_coins"		,"char", ""),
 					},
 		)
-		# for Rom Table, define which tags contains attributes to fetch
-		Table ['roms'] = field_table (
-			Tagg	=("rom",),
-			Txt		=(),
-			Attrib	=[
-					"name",
-					"size",
-					"crc",
-					"sha1",
-					"status" ,
-					"optional",
-					],
-			Tablename		= 'roms',
-			Fieldsdefaults	= {
-					"name": None,
-					"size": None,
-					"crc": None,
-					"sha1": None,
-					"status": None ,
-					"optional": None,
-					},
-			Dependant 		= True,
-			Fieldstype	= {
-					"name": 			("rom_name"			,"char", "NOT NULL"),
-					"size": 			("rom_size"			,"int" , ""),
-					"crc":	 			("rom_crc"			,"char", ""),
-					"sha1": 			("rom_sha1"			,"char", ""),
-					"status":			("rom_status"		,"char", ""),
-					"optional":			("rom_optional"		,"char", ""),
-					},
-		)	
-		# for device Table, define which tags contains attributes to fetch
-		Table ['devs'] = field_table (
-			Tagg	=("device_ref",),
-			Txt		=(),
-			Attrib	=[
-					"name",
-					],
-			Tablename		= 'devs',
-			Fieldsdefaults	= {
-					"name": None,
-					},
-			Dependant 		= True,
-			Fieldstype	= {
-					"name":	("dev_name", "char", "NOT NULL"),				},
-		)
-		# for disks Table, define which tags contains attributes to fetch
-		Table ['disks'] = field_table (
-			Tagg	=("disk",),
-			Txt		=(),
-			Attrib	=[
-					"name",
-					"sha1",
-					"region",
-					"index" ,
-					"writable",
-					],
-			Tablename		= 'disks',
-			Fieldsdefaults	= {
-					"name": None,
-					"sha1": None,
-					"region": None,
-					"index" : None,
-					"writable": None,
-					},
-			Dependant 		= True,
-			Fieldstype		= {
-					"name":		("dsk_name", "char", "NOT NULL"),
-					"sha1": 	("dsk_sha1", "char", ""),
-					"region":	("dsk_region", "char", ""),
-					"index":	("dsk_index", "char", ""),
-					"writable":	("dsk_writable", "char", ""),
-					}
-		)
-		# for samples Table, define which tags contains attributes to fetch
-		Table ['samples'] = field_table (
-			Tagg	= ("sample",),
-			Txt		= (),
-			Attrib	= [
-					"name",
-					],
-			Tablename		= 'samples',
-			Fieldsdefaults	= {
-					"name": None,
-					},
-			Dependant 		= True,
-			Fieldstype		= {
-					"name":	("spl_name", "char", "NOT NULL"),				},
-		)		
+	# for Rom Table, define which tags contains attributes to fetch
+	Table ['roms'] = field_table (
+		Tagg	=("rom",),
+		Txt		=(),
+		Attrib	=[
+				"name",
+				"size",
+				"crc",
+				"sha1",
+				"status" ,
+				"optional",
+				],
+		Tablename		= 'roms',
+		Fieldsdefaults	= {
+				"name": None,
+				"size": None,
+				"crc": None,
+				"sha1": None,
+				"status": None ,
+				"optional": None,
+				},
+		Dependant 		= True,
+		Fieldstype	= {
+				"name": 			("rom_name"			,"char", "NOT NULL"),
+				"size": 			("rom_size"			,"int" , ""),
+				"crc":	 			("rom_crc"			,"char", ""),
+				"sha1": 			("rom_sha1"			,"char", ""),
+				"status":			("rom_status"		,"char", ""),
+				"optional":			("rom_optional"		,"char", ""),
+				},
+	)	
+	# for device Table, define which tags contains attributes to fetch
+	Table ['devs'] = field_table (
+		Tagg	=("device_ref",),
+		Txt		=(),
+		Attrib	=[
+				"name",
+				],
+		Tablename		= 'devs',
+		Fieldsdefaults	= {
+				"name": None,
+				},
+		Dependant 		= True,
+		Fieldstype	= {
+				"name":	("dev_name", "char", "NOT NULL"),				},
+	)
+	# for disks Table, define which tags contains attributes to fetch
+	Table ['disks'] = field_table (
+		Tagg	=("disk",),
+		Txt		=(),
+		Attrib	=[
+				"name",
+				"sha1",
+				"region",
+				"index" ,
+				"writable",
+				],
+		Tablename		= 'disks',
+		Fieldsdefaults	= {
+				"name": None,
+				"sha1": None,
+				"region": None,
+				"index" : None,
+				"writable": None,
+				},
+		Dependant 		= True,
+		Fieldstype		= {
+				"name":		("dsk_name", "char", "NOT NULL"),
+				"sha1": 	("dsk_sha1", "char", ""),
+				"region":	("dsk_region", "char", ""),
+				"index":	("dsk_index", "char", ""),
+				"writable":	("dsk_writable", "char", ""),
+				}
+	)
+	# for samples Table, define which tags contains attributes to fetch
+	Table ['samples'] = field_table (
+		Tagg	= ("sample",),
+		Txt		= (),
+		Attrib	= [
+				"name",
+				],
+		Tablename		= 'samples',
+		Fieldsdefaults	= {
+				"name": None,
+				},
+		Dependant 		= True,
+		Fieldstype		= {
+				"name":	("spl_name", "char", "NOT NULL"),				},
+	)		
+	# for controls Table, define which tags contains attributes to fetch
+	Table ['controls'] = field_table (
+		Tagg	= ("control",),
+		Txt		= (),
+		Attrib	= [
+				"type",
+				],
+		Tablename		= 'controls',
+		Fieldsdefaults	= {
+				"type": None,
+				},
+		Dependant 		= True,
+		Fieldstype		= {
+				"type":	("ctrl_type", "char", "NOT NULL"),				},
+	)
 	
+	def agrupatefield (table,field):
+		""" Agrupattes multiple values of a dependant field on a new field on games table.
+			Table is a dependant table, and field is a field on a dependant table.
+			"""
+		sep = "/"
+		cursor = con.execute ('SELECT name FROM games')
+		nfield = "_".join([table,field])
+		gamecount = 0
+		commitevery = 5000
+		con.execute (f"ALTER TABLE games ADD {nfield} char")
+		con.commit()
+		print (f"Poblating database with {table},{field}")
+		for g in cursor:
+			gamecount += 1
+			depcursor = con.execute (f'SELECT {field} FROM {table} WHERE name = "{g[0]}"')
+			if depcursor == None:
+				continue	
+			agrupatevalue = sep.join(i[0] for i in depcursor)
+			con.execute (f"UPDATE games SET {nfield} = '{agrupatevalue}' WHERE name = '{g[0]}'")
+			if gamecount % commitevery == 0:
+				con.commit()
+		con.commit
+
 	class Game:
 		def __init__ (self,con):
 			self.con = con
@@ -622,18 +590,17 @@ def createSQL3 (xmlfile):
 	tablefields = ",".join( [i[0]+" "+i[1]+" "+i[2] for i in Table["games"].Fieldstype.values()])
 	cursor.execute (f'CREATE TABLE games ({tablefields})')
 	# creating dependant tables
-	for t,f in (
-			('roms', 	Table["roms"].Fieldstype.values()		),
-			('devs', 	Table["devs"].Fieldstype.values()		),
-			('disks', 	Table["disks"].Fieldstype.values()		),
-			('samples', Table["samples"].Fieldstype.values()	),
-			):
+	for t in Table:
+		if t == 'games':
+			continue
+		f = Table[t].Fieldstype.values()
 		tablefields = "name, " + ",".join( [i[0]+" "+i[1]+" "+i[2] for i in f]) 
 		cursor.execute (f'CREATE TABLE {t} ({tablefields})')
 	con.commit()
 
 	fh = open(xmlfile)
 	gamecount = 0
+	commitevery = 5000
 	game = Game(con)
 	gameretrieve = True  # Forces the closing of a game when a new game tagg is found
 	print ("Scanning XML and poblating database")
@@ -647,9 +614,10 @@ def createSQL3 (xmlfile):
 			gamecount += 1
 			print (gamecount," : ", game.Gdata["games"]['name'])
 			game = Game(con) # Init Game object
-			if (gamecount % 1000) == 0:
+			if (gamecount % commitevery) == 0:
 				con.commit()
 	con.commit()
+	agrupatefield ('controls','ctrl_type')
 	con.close()
 	return (dbpath)
 
@@ -674,12 +642,12 @@ def checkfield (con, field):
 			return True
 	return False
 
-
 class Bios:
 	def __init__(self,con):
 		# check if bios folder is present
 		self.con = con
 		self.msg = Messages ('Bios Set')
+		biospath = os.path.join(crsetpath,'bios')
 		if itemcheck(biospath) != "folder":
 			print (f"creating bios folder at: {biospath}")
 			os.makedirs (biospath)
@@ -737,9 +705,9 @@ class Rom:
 			os.makedirs (romspath)
 		romheads = self.con.execute (f'SELECT name,cloneof,romof, isbios FROM games WHERE name = "{romname}"').fetchone()
 		self.stuff = {
-			'snap'		: (snappath,	'snap',		'.*'),
-			'cheat'		: (cheatpath,	'cheat',	'.xml'),
-			'samples'	: (samplespath,	'samples',	'.zip'),
+			'snap'		: (snappath,	os.path.join(crsetpath,'snap'),		'.*'),
+			'cheat'		: (cheatpath,	os.path.join(crsetpath,'cheat'),	'.xml'),
+			'samples'	: (samplespath,	os.path.join(crsetpath,'samples'),	'.zip'),
 			}
 		if romheads == None:
 			#print (f'Thereis no rom-game called {romname}')
@@ -1111,7 +1079,7 @@ class Romset:
 		""" Represents the romset at the database
 			"""
 		self.con = con						# connection to SQLite3 Database
-		self.myCSVfile = "gamelist.csv"		
+		self.myCSVfile = os.path.join(crsetpath,"gamelist.csv")		
 		self.availableactions = ("add","remove","check")
 
 	def games2csv(self):
@@ -1125,6 +1093,8 @@ class Romset:
 			if r.lower() not in ('y','yes'):
 				print ("Proccess cancelled.")
 				return
+		if itemcheck (crsetpath) != "folder":
+			os.mkdir (crsetpath)
 			# For CSV generation and read
 		addedcolumns = ['action']
 		retrievefields = [	# Fields to retrieve from the DB.Table games
@@ -1140,6 +1110,7 @@ class Romset:
 							'driver_emulation',
 							'isbios',
 							'isdevice',
+							'controls_ctrl_type',
 							]
 		if Bestgames(self.con).isINdatabase:
 			retrievefields += [Bestgames(self.con).scorefield]
@@ -1317,8 +1288,8 @@ class Bestgames:
 		self.msg = Messages ('Bestgames')
 		self.con = con
 		self.scorefield = 'score'
-		self.bgfile = 'bestgames.ini'
 		self.isINdatabase = checkfield(con, self.scorefield)
+		self.bgfile = 'bestgames.ini'
 		if itemcheck (self.bgfile) != 'file':
 			self.msg.add('bestgames.ini','file not found, you can download it from:\nhttps://www.progettosnaps.net/bestgames/', spool='error')
 			self.fileexists = False
@@ -1435,7 +1406,7 @@ if __name__ == '__main__':
 	
 	parser = argparse.ArgumentParser()
 
-	parser.add_argument("-x", "--xml", default="mame.xml",
+	parser.add_argument("-x", "--xml", default=os.path.join(rsetpath,"mame.xml"),
 						help="xml file path. xml romset file.")
 	parser.add_argument("-s", "--romset", default=os.path.join(rsetpath,"roms"),
 						help="romset folder path. Contains all mame romset.")
@@ -1445,23 +1416,20 @@ if __name__ == '__main__':
 						help="cheat folder")
 	parser.add_argument("-sm", "--samples", default=os.path.join(rsetpath,"samples"),
 						help="samples folder")
-	parser.add_argument("-b", "--bios", default="bios",
-						help="bios folder path. A folder where only the custom bios are.")
 	parser.add_argument("-sn", "--snap", default=os.path.join(rsetpath,artworkpath,"snap"),
 						help="artwork snap folder")
-	parser.add_argument("-r", "--roms", default="roms",
+	parser.add_argument("-r", "--roms", default=os.path.join(crsetpath,"roms"),
 						help="roms folder path. Your custom rom folder.")
 
 
 	args = parser.parse_args()
 
 	# Retrieving variables from args
-		# defaults on current dir
-	xmlfile		= args.xml
-	romsetpath	= args.romset
-	biospath	= args.bios
+		# defaults on custom romset dir
 	romspath	= args.roms
 		# defaults on romset dir
+	romsetpath	= args.romset
+	xmlfile		= args.xml
 	chdspath	= args.chds
 	samplespath	= args.samples
 	cheatpath	= args.cheat
@@ -1475,8 +1443,6 @@ if __name__ == '__main__':
 		# Errors
 	if itemcheck(romsetpath)	!= "folder":
 		errorlist.append (f"I can't find romset folder:(--romset {romsetpath})")
-	if biospath == romsetpath:
-		errorlist.append (f'please, place bios folder out of your romset folder: {biospath}')
 	if romspath == romsetpath:
 		errorlist.append (f'please, place your custom roms path out of your romset folder: {romspath}')
 
