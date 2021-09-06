@@ -484,14 +484,17 @@ def createSQL3 (xmlfile):
 		print (f"Poblating database with {table},{field}")
 		for g in cursor:
 			gamecount += 1
-			depcursor = con.execute (f'SELECT {field} FROM {table} WHERE name = "{g[0]}"')
+			depcursor = con.execute (f"SELECT {field} FROM {table} WHERE name = '{g[0]}'")
+			if g[0]=='superchs':
+				print ('superchs')
+
 			if depcursor == None:
-				continue	
+				continue
 			agrupatevalue = sep.join(i[0] for i in depcursor)
 			con.execute (f"UPDATE games SET {nfield} = '{agrupatevalue}' WHERE name = '{g[0]}'")
 			if gamecount % commitevery == 0:
 				con.commit()
-		con.commit
+		con.commit()
 
 	class Game:
 		def __init__ (self,con):
@@ -647,10 +650,10 @@ class Bios:
 		# check if bios folder is present
 		self.con = con
 		self.msg = Messages ('Bios Set')
-		biospath = os.path.join(crsetpath,'bios')
-		if itemcheck(biospath) != "folder":
-			print (f"creating bios folder at: {biospath}")
-			os.makedirs (biospath)
+		self.biospath = os.path.join(crsetpath,'bios')
+		if itemcheck(self.biospath) != "folder":
+			print (f"creating bios folder at: {self.biospath}")
+			os.makedirs (self.biospath)
 	def copyallbios (self):
 		""" Copy all bios to the bios folder
 			"""
@@ -663,7 +666,7 @@ class Bios:
 		""" copy a bios from romset to bios folder
 			"""
 		origin 	= check (biosname, romsetpath)
-		dest 	= check (biosname, biospath)
+		dest 	= check (biosname, self.biospath)
 		if origin.exists == False:
 			self.msg.add (biosname,"bios is not present at romset",spool='error')
 			return
@@ -678,7 +681,7 @@ class Bios:
 		cursor = self.con.execute ("SELECT name FROM games WHERE isbios = 1")
 		for biosname in cursor:
 			origin	= check (biosname[0], romspath)
-			dest	= check (biosname[0], biospath)
+			dest	= check (biosname[0], self.biospath)
 			if origin.exists == False:
 				continue
 			if dest.exists == True:
@@ -1110,6 +1113,9 @@ class Romset:
 							'driver_emulation',
 							'isbios',
 							'isdevice',
+							'input_players',
+							'input_buttons',
+							'input_coins',
 							'controls_ctrl_type',
 							]
 		if Bestgames(self.con).isINdatabase:
