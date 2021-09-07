@@ -138,6 +138,9 @@ class Messages ():
 				self.add(msg.name,f"({' : '.join(list(i))})", spool='error')
 
 def createSQL3 (xmlfile):
+	if itemcheck (xmlfile) != 'file':
+		print (f'I can not find mame.xml file: {xmlfile}\nPlease create the file with your mame\nmame -listxml > mame.xml')
+		return None
 
 	class Readxmlline:
 		def __t2dtags__ (self, txt):
@@ -485,9 +488,6 @@ def createSQL3 (xmlfile):
 		for g in cursor:
 			gamecount += 1
 			depcursor = con.execute (f"SELECT {field} FROM {table} WHERE name = '{g[0]}'")
-			if g[0]=='superchs':
-				print ('superchs')
-
 			if depcursor == None:
 				continue
 			agrupatevalue = sep.join(i[0] for i in depcursor)
@@ -579,7 +579,7 @@ def createSQL3 (xmlfile):
 	dbpath = os.path.splitext(xmlfile)[0] + ".sqlite3"
 
 	if itemcheck (dbpath) == 'file':
-		print ("Database found, loading it.")
+		print ("Database found, loaded.")
 		return (dbpath)
 	elif itemcheck (xmlfile) != 'file':
 		print ("I can't find xml or associated database. Can't continue")
@@ -1043,7 +1043,7 @@ class Rom:
 			print (f"{self.name} attaching {i}")
 			origin = self.__identifile__(originpath, filetype)
 			if origin == None:
-				origin = os.path.join(originpath,destpath)+'.zip' # search for a zip file
+				origin = os.path.join(originpath,os.path.basename(originpath))+'.zip' # search for a zip file
 				if itemcheck (origin) == 'file':
 					ziplist = self.__filezipromset__(origin)
 					element = self.name + filetype
@@ -1481,7 +1481,7 @@ if __name__ == '__main__':
 	if dbpath:
 		con = sqlite3.connect (dbpath)	# Connection to SQL database.
 	else:
-		print ("Can't find a database, please specify one with --xml argument.\n")
+		print ("Can't find a database, please generate one giving a xml file on the --xml argument.\n")
 		exit()
 
 	#  User interface:
