@@ -19,8 +19,7 @@ __doc__		= """
 """
 
 # Standard libray imports
-from genericpath import exists
-import os, argparse, sqlite3, re, shutil, zipfile, csv, configparser
+import os, configparser, argparse, sqlite3, re, shutil, zipfile, csv
 from hashlib import sha1
 from glob import glob
 from collections import namedtuple
@@ -34,16 +33,15 @@ class MalformedPathError(ValueError):
 	pass
 class EmptyStringError(ValueError):
 	pass
-class ValueNotExpected(ValueError):
-	pass
 
 #=====================================
 # Defaults
 #=====================================
 romsext		= '.zip'
 rsetpath 	= 'romset'
-crsetpath	= 'customromset'
 artworkpath	= 'artwork'
+
+crsetpath	= 'customromset'
 tmppath		= 'tmp'
 
 #=====================================
@@ -1444,15 +1442,16 @@ if __name__ == '__main__':
 						help="samples folder")
 	parser.add_argument("-sn", "--snap", default=os.path.join(rsetpath,artworkpath,"snap"),
 						help="artwork snap folder")
-	parser.add_argument("-r", "--roms", default=os.path.join(crsetpath,"roms"),
-						help="roms folder path. Your custom rom folder.")
+	parser.add_argument("-r", "--customromset", default=os.path.join(crsetpath),
+						help="Your custom rom folder. There will go your custom set of games-roms and stuff")
 
 
 	args = parser.parse_args()
 
 	# Retrieving variables from args
 		# defaults on custom romset dir
-	romspath	= args.roms
+	crsetpath	= args.customromset
+	romspath	= os.path.join(crsetpath,"roms")
 		# defaults on romset dir
 	romsetpath	= args.romset
 	xmlfile		= args.xml
@@ -1465,7 +1464,7 @@ if __name__ == '__main__':
 	# Checking parameters
 	errorlist 	= []
 	warninglist	= []
-
+	
 		# Errors
 	if itemcheck(romsetpath)	!= "folder":
 		errorlist.append (f"I can't find romset folder:(--romset {romsetpath})")
@@ -1523,7 +1522,7 @@ if __name__ == '__main__':
 		print ('\n')
 		for o in user_options:
 			print (f"{o} - {user_options[o]}")
-		action = input ("choose an option, hit enter to exit > ")
+		action = input ("Enter an option, hit enter to exit > ")
 		if action == "1":
 			Bios(con).copyallbios()
 		elif action == "2":
