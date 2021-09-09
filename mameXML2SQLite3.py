@@ -596,6 +596,11 @@ def createSQL3 (xmlfile):
 		print ("Generating a new SQLite database. Be patient.")
 
 	con = sqlite3.connect (dbpath) # it creates one if file doesn't exists
+	# Version table
+	con.execute (f'CREATE TABLE xmlheads (key char NOT NULL, value char)')
+	con.commit()
+	con.execute (f"INSERT INTO xmlheads (key,value) VALUES ('version',{xmlversion})")
+	con.commit()
 	cursor = con.cursor() # object to manage queries
 	# game table
 	tablefields = ",".join( [i[0]+" "+i[1]+" "+i[2] for i in Table["games"].Fieldstype.values()])
