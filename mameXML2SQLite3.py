@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 # -*- encoding: utf-8 -*-
 
-__version__ = "0.44"
+__version__ = "0.44beta"
 __author__  = "pablo33"
 __doc__		= """
 	This software helps you managing a Mame Romset.
@@ -20,6 +20,7 @@ __doc__		= """
 
 # Standard libray imports
 import os, configparser, argparse, sqlite3, re, shutil, zipfile, csv
+from sys import exit
 from hashlib import sha1
 from glob import glob
 from collections import namedtuple
@@ -585,6 +586,7 @@ def createSQL3 (xmlfile):
 	dbpath = os.path.splitext(xmlfile)[0] + ".sqlite3"
 
 	if itemcheck (dbpath) == 'file':
+		## TODO: insert XML version on DATABASE and retrieve it later.
 		print ("Database found, loaded.")
 		return (dbpath)
 	elif itemcheck (xmlfile) != 'file':
@@ -1415,7 +1417,7 @@ class Catver:
 		for i in cursor:
 			game = i[0]
 			if game in catver['Category']:
-				self.con.execute (f"UPDATE games SET {self.catverfield} = '{catver['Category'][game]}' WHERE name = '{game}'")
+				self.con.execute (f"UPDATE games SET {self.catverfield}=? WHERE name=?", (catver['Category'][game], game))
 			commitcounter += 1
 			if commitcounter % commitevery == 0:
 				self.con.commit ()
@@ -1442,7 +1444,7 @@ if __name__ == '__main__':
 						help="samples folder")
 	parser.add_argument("-sn", "--snap", default=os.path.join(rsetpath,artworkpath,"snap"),
 						help="artwork snap folder")
-	parser.add_argument("-r", "--customromset", default=os.path.join(crsetpath),
+	parser.add_argument("-r", "--customromset", default=crsetpath,
 						help="Your custom rom folder. There will go your custom set of games-roms and stuff")
 
 
@@ -1506,6 +1508,7 @@ if __name__ == '__main__':
 	#  User interface:
 	#=====================
 	action = True
+	print ("mameXML2SQLite3 v", __version__, "by ", __author__)
 	while action != "":
 		user_options = {
 			"1": "Create a bios folder with all bios roms",
