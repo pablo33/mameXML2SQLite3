@@ -494,7 +494,7 @@ def createSQL3 (xmlfile):
 		print (f"Poblating database with {table},{field}")
 		for g in cursor:
 			gamecount += 1
-			depcursor = con.execute (f"SELECT {field} FROM {table} WHERE name = '{g[0]}'")
+			depcursor = con.execute (f"SELECT {field} FROM {table} WHERE name=?", (g[0],))
 			if depcursor == None:
 				continue
 			agrupatevalue = sep.join(i[0] for i in depcursor)
@@ -1251,7 +1251,7 @@ class Romset:
 				print (f'Selected: {options[candidate]}')
 				return options[candidate]
 			oneshot = self.con.execute (f"SELECT name, description FROM games WHERE \
-						name = '{candidate}'").fetchone()
+						name=?", (candidate,)).fetchone()
 			if oneshot is not None:
 				return oneshot[0]
 			print ("\n"*2, f">> searching {candidate}>>")
@@ -1259,7 +1259,7 @@ class Romset:
 						{opclones[opclones_st]} \
 						isdevice IS FALSE AND \
 						isbios IS FALSE AND \
-						description LIKE '%{candidate}%'"
+						description LIKE '%?%'", (candidate,)
 						)
 			options = dict ()
 			counter = 0
