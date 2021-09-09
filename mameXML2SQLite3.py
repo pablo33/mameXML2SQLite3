@@ -498,7 +498,7 @@ def createSQL3 (xmlfile):
 			if depcursor == None:
 				continue
 			agrupatevalue = sep.join(i[0] for i in depcursor)
-			con.execute (f"UPDATE games SET {nfield} = '{agrupatevalue}' WHERE name = '{g[0]}'")
+			con.execute (f"UPDATE games SET {nfield}=? WHERE name=?",(agrupatevalue,g[0],))
 			if gamecount % commitevery == 0:
 				con.commit()
 		con.commit()
@@ -1362,7 +1362,7 @@ class Bestgames:
 						next = pscorelist[-1]
 					continue
 				if readable and i != "":
-					self.con.execute (f"UPDATE games SET {self.scorefield} = '{value}' WHERE name = '{i}'")
+					self.con.execute (f"UPDATE games SET {self.scorefield}=? WHERE name=?", (value,i,))
 					commitcounter += 1
 					if commitcounter % commitevery == 0:
 						self.con.commit ()
