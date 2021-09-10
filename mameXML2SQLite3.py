@@ -141,8 +141,8 @@ def createSQL3 (xmlfile):
 
 	### Checking and initializing the Database
 	dbpath = os.path.splitext(xmlfile)[0] + ".sqlite3"
-	con = sqlite3.connect (dbpath) # it creates one if file doesn't exists
 	if itemcheck (dbpath) == 'file':
+		con = sqlite3.connect (dbpath) # it creates one if file doesn't exists
 		xmlversion = con.execute ("SELECT value FROM xmlheads WHERE key='version'").fetchone()[0]
 		print (f"Working with database for Mame XMLversion {xmlversion}")
 		return (dbpath)
@@ -151,7 +151,7 @@ def createSQL3 (xmlfile):
 		exit()
 	else:
 		print ("Generating a new SQLite database. Be patient.")
-
+		con = sqlite3.connect (dbpath) # it creates one if file doesn't exists
 	class Readxmlline:
 		""" Reader object based on a line of XML file.
 			"""
