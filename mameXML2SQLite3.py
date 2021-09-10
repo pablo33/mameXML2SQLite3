@@ -138,9 +138,19 @@ def createSQL3 (xmlfile):
 	""" This function reads an XML file and creates a correspondent .sqlite3 file
 		it returns the new SQLite3 DB path
 		"""
-	if itemcheck (xmlfile) != 'file':
+
+	### Checking and initializing the Database
+	dbpath = os.path.splitext(xmlfile)[0] + ".sqlite3"
+	con = sqlite3.connect (dbpath) # it creates one if file doesn't exists
+	if itemcheck (dbpath) == 'file':
+		xmlversion = con.execute ("SELECT value FROM xmlheads WHERE key='version'").fetchone()[0]
+		print (f"Working with database for Mame XMLversion {xmlversion}")
+		return (dbpath)
+	elif itemcheck (xmlfile) != 'file':
 		print (f'I can not find mame.xml file: {xmlfile}\nPlease create the file with your mame\nmame -listxml > mame.xml')
-		return None
+		exit()
+	else:
+		print ("Generating a new SQLite database. Be patient.")
 
 	class Readxmlline:
 		""" Reader object based on a line of XML file.
@@ -582,20 +592,6 @@ def createSQL3 (xmlfile):
 						questions = ",".join("?"*len(r[1])) + ",?"
 						self.con.execute(f"INSERT INTO {T} ({fields}) VALUES ({questions})", values)
 
-	### Checking and initializing the Database
-	dbpath = os.path.splitext(xmlfile)[0] + ".sqlite3"
-
-	if itemcheck (dbpath) == 'file':
-		## TODO: insert XML version on DATABASE and retrieve it later.
-		print ("Database found, loaded.")
-		return (dbpath)
-	elif itemcheck (xmlfile) != 'file':
-		print ("I can't find xml or associated database. Can't continue")
-		exit()
-	else:
-		print ("Generating a new SQLite database. Be patient.")
-
-	con = sqlite3.connect (dbpath) # it creates one if file doesn't exists
 	# Version table
 	con.execute (f'CREATE TABLE xmlheads (key char NOT NULL, value char)')
 	con.commit()
@@ -635,6 +631,7 @@ def createSQL3 (xmlfile):
 	con.commit()
 	agrupatefield ('controls','ctrl_type')
 	con.close()
+	print (f"Working with database for Mame XMLversion {xmlversion}")
 	return (dbpath)
 
 def check (file, path):
@@ -892,7 +889,7 @@ class Rom:
 		return True
 
 	def __fileromset__ (self, romname, table, field):
-		""" Returns a list of fileroms the Database, tables of roms, devices or disks
+		""" Returns a set of fileroms the Database, tables of roms, devices or disks
 			"""
 		
 		if self.name != None:
@@ -959,33 +956,41 @@ class Rom:
 			self.__checkSHA1__(file, 'disks', 'dsk_name', 'dsk_sha1')
 
 	def __checkROMsSHA1__ (self):
-		checked = []
+		checked = []  # is a list of already checked file-roms.
 		if self.origin.exists:
 			a = zipfile.ZipFile(self.origin.file, mode='r')
+			rtmppath = os.path.join(tmppath,self.name)
+			a.extractall(rtmppath)
 			romlistzip = self.__filezipromset__(self.origin.file)
 			romlist = self.__fileromset__(self.name,'roms','rom_name')
+			extrafiles = dict()  # extra files that are at ZIP file but not in Database
+			for ef in romlistzip.difference(romlist):
+				extrafiles [ef] = self.__sha1__(os.path.join(rtmppath,ef))
+			print (extrafiles)
 			for r in romlist:
-				if r not in list(romlistzip) and self.romof is not None and r not in checked:
-					rchecked, msg = Rom (self.con, self.romof).__checkROMsSHA1__()
+				if r in checked:
+					continue
+				if r not in list(romlistzip) and self.romof is not None:
+					rchecked, xtraf, msg = Rom (self.con, self.romof).__checkROMsSHA1__()
 					checked += rchecked	# Returns a list of already checked roms
+					extrafiles.update(xtraf)
 					self.msg.mix(msg)	# Returning messages, merging them to msg object
 					continue
-				elif r in checked:
-					continue
-				elif r in romlistzip:
-					extracted = a.extract(r,tmppath)
-					self.__checkSHA1__(extracted, 'roms', 'rom_name', 'rom_sha1')
-					os.remove(os.path.join(tmppath,r))
+				sqldigest  = self.con.execute (f"SELECT rom_sha1 FROM roms WHERE name = '{self.name}' AND rom_name = '{r}'").fetchone()[0]
+				if r in romlistzip:
+					self.__checkSHA1__(os.path.join(rtmppath,r), 'roms', 'rom_name', 'rom_sha1')
+				elif sqldigest in extrafiles.values():
+					self.msg.add(r,f"Rom exists, but with other name")
 				else:
 					romstatus = self.__romstatus__ (r)
-					if romstatus != None:
-						self.msg.add(r, f"Rom not present at zip file: rom with {romstatus} status : (Warning)",)	
-					else:
+					if romstatus == None:
 						self.msg.add(r, "Rom not present at zip file", spool='error')
+					else:
+						self.msg.add(r, f"Rom not present at zip file: rom with {romstatus} status : (Warning)",)	
 				checked.append (r)
 		else:
 			self.msg.add('ROM ZIP', f'File rom in ZIP not found {self.name}', spool='error')
-		return checked, self.msg
+		return checked, extrafiles, self.msg
 
 	def __romstatus__ (self, rom_name):
 		""" Returns rom_status field for a rom on a romset, it is intended to discard error on this roms.
@@ -1013,13 +1018,12 @@ class Rom:
 	
 	def checkrom (self):
 		""" Checks rom integrity at the romset
-			Checks for the SHA1 for the files, bios and parents games is it is a clone.
-			-TODO: devices
+			Checks for the SHA1 for the files, bios and parents games.
 			"""
 		if self.name == None or not self.hasroms:
 			return self.msg
 		self.msg = Messages(self.name)
-		print (f"Checking files for {self.name}")
+		print (f"Checking rom files for {self.name}")
 		
 		# RomZIPfile
 		if self.origin.exists:
@@ -1434,7 +1438,8 @@ if __name__ == '__main__':
 	########################################
 	# Retrieve cmd line parameters
 	########################################
-	
+	print ("mameXML2SQLite3 v", __version__, "by", __author__)
+
 	parser = argparse.ArgumentParser()
 
 	parser.add_argument("-x", "--xml", default=os.path.join(rsetpath,"mame.xml"),
@@ -1513,7 +1518,6 @@ if __name__ == '__main__':
 	#  User interface:
 	#=====================
 	action = True
-	print ("mameXML2SQLite3 v", __version__, "by ", __author__)
 	while action != "":
 		user_options = {
 			"1": "Create a bios folder with all bios roms",
