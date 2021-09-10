@@ -97,7 +97,6 @@ class Messages ():
 				txt = ' : '.join([self.name, i[0], i[1]])
 				returnedlist.append(txt)
 				print (txt)
-			print ('\n')
 			return returnedlist
 
 	def Wmsglist (self, notice = ''):
@@ -112,7 +111,6 @@ class Messages ():
 				txt = ' : '.join([self.name, i[0], i[1]])
 				returnedlist.append(txt)
 				print (txt)
-			print ('\n')
 
 	def Resumelist (self, notice = ''):
 		""" Prints a resume of errors / warnings
@@ -120,8 +118,10 @@ class Messages ():
 		print (notice)
 		if len (self.Emsg) > 0:
 			self.Emsglist(notice='Errors encountered')
+			print ("Errors encountered")
 		elif len (self.Wmsg) > 0:
 			self.Wmsglist(notice='Warnings encountered')
+			print ("Seems OK, see warnings if you experience problems.")
 		else:
 			print ("All OK!")
 	
@@ -966,7 +966,6 @@ class Rom:
 			extrafiles = dict()  # extra files that are at ZIP file but not in Database
 			for ef in romlistzip.difference(romlist):
 				extrafiles [ef] = self.__sha1__(os.path.join(rtmppath,ef))
-			print (extrafiles)
 			for r in romlist:
 				if r in checked:
 					continue
@@ -1045,7 +1044,8 @@ class Rom:
 			print ('>Checking devices:')
 			self.__checkdevices__()
 			
-		self.msg.Emsglist(notice='Errors encountered:')
+		self.msg.Resumelist(notice=f"====Resume for {self.name}====")
+		print ("="*30)
 		return self.msg
 
 	def __identifile__ (self, path, fileext):
