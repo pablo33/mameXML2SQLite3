@@ -20,6 +20,7 @@ __doc__		= """
 
 # Standard libray imports
 import os, configparser, argparse, sqlite3, re, shutil, zipfile, csv
+from sqlite3.dbapi2 import Cursor
 from sys import exit
 from hashlib import sha1
 from glob import glob
@@ -781,23 +782,63 @@ class Rom:
 
 	def copyrom (self):
 		""" copy a romgame-pack from the romset folder to the roms folder
-			a romgamepack is formed with rom/clone origin rom, and bios. 
+			a romga mepack is formed with rom/clone roms, and bios.
+			It also:
+			- adds devices to the zip-file that are stored as part of the romset
+			- TODO: rename existent roms according to its SHA1.
+			- adds required CHDs
+			- stuff
 			"""
 		self.msg = Messages(self.name)
 		if self.name != None:
 			self.__copyfile__()
+			self.__fixrnames__()
 			if self.romof != None:
 				msgs = Rom (con, self.romof).copyrom()
 				self.msg.mix(msgs) 
-			#if self.isbios:
-			#	Bios (con).copybios(self.name)
 			if self.msg.success:
 				self.__adddevs__()
 			if self.msg.success:
 				self.__addchds__()
 				self.__addstuff__()
-			self.msg.Emsglist(notice="Something Was wrong, some files were not present.")
 		return self.msg
+
+	def __fixrnames__(self):
+		""" Fixes rom names inside the zip file.
+		Takes a list of zipped files, checks their SHA1 and fix their names according to
+		the romset database.
+		This action operates over the file at custom romset. 
+			"""
+		print ("checking and fixing rom names:")
+		a = zipfile.ZipFile(self.dest.file, mode='r')
+		rtmppath = os.path.join(tmppath,self.name)
+		a.extractall(rtmppath)
+		a.close()
+		romlistzip = self.__filezipromset__(self.dest.file)
+		rezip = False
+		for r in romlistzip:
+			filerom = os.path.join(rtmppath,r)
+			rfsha = self.__sha1__(filerom)
+			cursor = self.con.execute("SELECT rom_name FROM roms WHERE rom_sha1 = ?", (rfsha,)).fetchone()
+			if cursor == None:
+				self.msg.add(r,"No SHA1 found for this file at the DB")
+				continue
+			rdbname = cursor[0]
+			if rdbname == r and rdbname not in romlistzip:
+				continue
+			shutil.move (filerom, os.path.join(rtmppath,rdbname))
+			self.msg.add(rdbname,"This rom was renamed at the zipfile")
+			rezip = True
+		if rezip:
+			# Create new zip file
+			os.remove(self.dest.file)
+			a = zipfile.ZipFile(self.dest.file, mode='w')
+			filelist = glob (os.path.join(rtmppath,"*.*"))
+			for f in filelist:
+				a.write(filename = f, arcname = os.path.basename(f))
+			a.close()
+		if itemcheck(rtmppath)=='folder':
+			shutil.rmtree(rtmppath)
 
 	def __copyfile__ (self):
 		""" copy a romfile to roms folder
