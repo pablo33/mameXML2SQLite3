@@ -70,8 +70,10 @@ class Messages ():
 		self.name = name
 		self.Wmsg = []	# stores warning messages
 		self.Emsg = []	# stores error messages
+		self.Imsg = []  # stores info messages
 		self.verbose = verbose
 		self.success = True	# It turns False if any error is registered
+		self.__a__ = 10
 	
 	def add (self, item, text, spool='warning'):
 		""" Adds a message, spool can be "warning" or "error"
@@ -82,6 +84,8 @@ class Messages ():
 		if spool == 'error':
 			self.Emsg.append ((item, text))
 			self.success = False
+		elif spool == 'info':
+			self.Imsg.append ((item, text))
 		self.Wmsg.append ((item, text))
 		if self.verbose:
 			print (f'{self.name} : {item} : {text}')
@@ -91,9 +95,8 @@ class Messages ():
 			"""
 		if len (self.Emsg)>0:
 			returnedlist = []
-			a = 10
 			print (notice)
-			print ('='*a, f' ERRORS for {self.name}','='*a)
+			print ('='*self.__a__, f' ERRORS for {self.name}','='*self.__a__)
 			for i in self.Emsg:
 				txt = ' : '.join([self.name, i[0], i[1]])
 				returnedlist.append(txt)
@@ -106,8 +109,19 @@ class Messages ():
 		if len (self.Wmsg)>0:
 			print (notice)
 			returnedlist = []
-			a = 10
-			print ('='*a, f' Warnings for {self.name}','='*a)
+			print ('='*self.__a__, f' Warnings for {self.name}','='*self.__a__)
+			for i in self.Wmsg:
+				txt = ' : '.join([self.name, i[0], i[1]])
+				returnedlist.append(txt)
+				print (txt)
+
+	def Imsglist (self, notice = ''):
+		""" Output a Info messages as a list 
+			"""
+		if len (self.Imsg)>0:
+			print (notice)
+			returnedlist = []
+			print ('='*self.__a__, f' Info for {self.name}','='*self.__a__)
 			for i in self.Wmsg:
 				txt = ' : '.join([self.name, i[0], i[1]])
 				returnedlist.append(txt)
@@ -123,6 +137,8 @@ class Messages ():
 		elif len (self.Wmsg) > 0:
 			self.Wmsglist(notice='Warnings encountered')
 			print ("Seems OK, see warnings if you experience problems.")
+		elif len (self.Imsg) > 0:
+			self.Imsglist(notice='Information messages')
 		else:
 			print ("All OK!")
 	
@@ -696,7 +712,7 @@ class Bios:
 			if origin.exists == False:
 				continue
 			if dest.exists == True:
-				self.msg.add (biosname[0],"bios already exist on bios folder")
+				self.msg.add (biosname[0],"bios already exist on bios folder", spool='info')
 				os.remove (origin.file)
 				continue
 			shutil.move (origin.file, dest.file)
@@ -773,11 +789,11 @@ class Rom:
 			os.remove (self.dest.file)
 			print (f'{self.name} : deleted')
 		else:
-			self.msg.add (f'{self.name}:Rom ZIP',"File is not at your custom Rom folder")
-		self.__removestuff__()
+			self.msg.add (f'{self.name}:Rom ZIP',"File is not at your custom Rom folder", spool='info')
 		# removing CHDs
 		if itemcheck (self.chdgamedir) == 'folder':
 			shutil.rmtree (self.chdgamedir)
+		self.__removestuff__()
 		return self.msg
 
 	def copyrom (self):
@@ -796,11 +812,9 @@ class Rom:
 			if self.romof != None:
 				msgs = Rom (con, self.romof).copyrom()
 				self.msg.mix(msgs) 
-			if self.msg.success:
-				self.__adddevs__()
-			if self.msg.success:
-				self.__addchds__()
-				self.__addstuff__()
+			self.__adddevs__()
+			self.__addchds__()
+			self.__addstuff__()
 		return self.msg
 
 	def __fixrnames__(self):
@@ -810,7 +824,11 @@ class Rom:
 		This action operates over the file at custom romset. 
 			"""
 		print ("checking and fixing rom names:")
-		a = zipfile.ZipFile(self.dest.file, mode='r')
+		try:
+			a = zipfile.ZipFile(self.dest.file, mode='r')
+		except zipfile.BadZipFile:
+			self.msg.add(self.name,"Its a bad zipfile", spool="error")
+			return
 		rtmppath = os.path.join(tmppath,self.name)
 		a.extractall(rtmppath)
 		a.close()
@@ -827,7 +845,7 @@ class Rom:
 			if rdbname == r and rdbname not in romlistzip:
 				continue
 			shutil.move (filerom, os.path.join(rtmppath,rdbname))
-			self.msg.add(rdbname,"This rom was renamed at the zipfile")
+			self.msg.add(rdbname,"This rom was renamed at the zipfile", spool='info')
 			rezip = True
 		if rezip:
 			# Create new zip file
@@ -857,8 +875,8 @@ class Rom:
 			"""
 		gamedevset 	= self.__fileromset__ (self.name,'devs', 'dev_name')
 		for device in gamedevset:
-			return self.__mergerom__(device)
-		return True
+			self.__mergerom__(device)
+		return
 	
 	def __CHDsfiles__ (self):
 		""" returns a list of CHDs files of the romset
@@ -904,12 +922,12 @@ class Rom:
 		zipfileset	= self.__filezipromset__ (self.dest[0])
 		if zipfileset == False:
 			# Zip file doesn't exist
-			return False
+			return
 		devromset 	= self.__fileromset__ (source,'roms','rom_name')
 		if len(devromset) == 0:
-			return True
+			return
 		if devromset in zipfileset:
-			self.msg.add (f'roms in {self.dest[0]}',"files are already in the zip file")
+			self.msg.add (f'roms in {self.dest[0]}',"files are already in the zip file", spool='info')
 			return
 		tomerge = devromset.difference(zipfileset)
 		sourcepath = check (source, romsetpath)
@@ -917,7 +935,11 @@ class Rom:
 			self.msg.add(f'mergerom: {sourcepath[0]}', 'File is not present', spool='error')
 			return
 		sourcepath = sourcepath.file
-		sourcezip = zipfile.ZipFile(sourcepath, mode='r')
+		try:
+			sourcezip = zipfile.ZipFile(sourcepath, mode='r')
+		except zipfile.BadZipFile:
+			self.msg.add(self.name,f"{sourcepath} Its a bad zipfile", spool="error")
+			return
 		mergezip  = zipfile.ZipFile(self.dest.file, mode='a')
 		if len (tomerge) > 0:
 			for i in tomerge:
@@ -927,7 +949,7 @@ class Rom:
 			sourcezip.close()
 			mergezip.close()
 			shutil.rmtree(tmppath)
-		return True
+		return
 
 	def __fileromset__ (self, romname, table, field):
 		""" Returns a set of fileroms the Database, tables of roms, devices or disks
@@ -946,8 +968,12 @@ class Rom:
 		""" Returns a set of files contained into the zip file
 			"""
 		if itemcheck (filezip) != 'file':
-			return False
-		a = zipfile.ZipFile(filezip, mode='r').namelist()
+			a = None
+		try:
+			a = zipfile.ZipFile(filezip, mode='r').namelist()
+		except zipfile.BadZipFile:
+			self.msg.add(self.name,f"{filezip} Its a bad zipfile", spool="error")
+			a = None
 		if a != None:
 			return set (a)
 		return set ()
@@ -998,23 +1024,31 @@ class Rom:
 
 	def __checkROMsSHA1__ (self):
 		checked = []  # is a list of already checked file-roms.
+		extrafiles = dict()  # extra files that are at ZIP file but not in Database
 		if self.origin.exists:
-			a = zipfile.ZipFile(self.origin.file, mode='r')
+			try:
+				a = zipfile.ZipFile(self.origin.file, mode='r')
+			except zipfile.BadZipFile:
+				self.msg.add(self.name,"Its a bad zipfile", spool="error")
+				return checked, extrafiles, self.msg
 			rtmppath = os.path.join(tmppath,self.name)
 			a.extractall(rtmppath)
 			romlistzip = self.__filezipromset__(self.origin.file)
 			romlist = self.__fileromset__(self.name,'roms','rom_name')
-			extrafiles = dict()  # extra files that are at ZIP file but not in Database
 			for ef in romlistzip.difference(romlist):
 				extrafiles [ef] = self.__sha1__(os.path.join(rtmppath,ef))
 			for r in romlist:
 				if r in checked:
 					continue
 				if r not in list(romlistzip) and self.romof is not None:
-					rchecked, xtraf, msg = Rom (self.con, self.romof).__checkROMsSHA1__()
-					checked += rchecked	# Returns a list of already checked roms
-					extrafiles.update(xtraf)
-					self.msg.mix(msg)	# Returning messages, merging them to msg object
+					parent = Rom (self.con, self.romof)
+					if parent.origin.exists:
+						rchecked, xtraf, msg = parent.__checkROMsSHA1__()
+						checked += rchecked	# Returns a list of already checked roms
+						extrafiles.update(xtraf)
+						self.msg.mix(msg)	# Returning messages, merging them to msg object
+					else:
+						self.msg.add(self.romof,f"No parent / bios rom found: file {r}", spool='error')
 					continue
 				sqldigest  = self.con.execute (f"SELECT rom_sha1 FROM roms WHERE name = '{self.name}' AND rom_name = '{r}'").fetchone()[0]
 				if r in romlistzip:
@@ -1127,12 +1161,16 @@ class Rom:
 					continue
 			dest = os.path.join(destpath, os.path.basename(origin))
 			if itemcheck (dest) == 'file':
-				self.msg.add(f'{i}',f"file already exist")
+				self.msg.add(f'{i}',f"file already exist", spool='info')
 				continue
 			if itemcheck (destpath) != "folder":
 				os.mkdir(destpath)
 			if unzip:
-				zipfile.ZipFile(origin, mode='r').extract(element, destpath)
+				try:
+					zipfile.ZipFile(origin, mode='r').extract(element, destpath)
+				except zipfile.BadZipFile:
+					self.msg.add(f"adding {i}","Its a bad zipfile", spool="error")
+					continue
 			else:
 				shutil.copyfile (origin, dest)
 	
@@ -1144,7 +1182,7 @@ class Rom:
 			dest = self.__identifile__(destpath, filetype)
 			if dest != None:
 				if itemcheck (dest) == 'file':
-					self.msg.add(i, "Deleted")
+					self.msg.add(i, "Deleted", spool='info')
 					os.remove(dest)
 
 class Romset:
