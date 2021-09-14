@@ -806,15 +806,18 @@ class Rom:
 			- stuff
 			"""
 		self.msg = Messages(self.name)
-		if self.name != None:
-			self.__copyfile__()
-			self.__fixrnames__()
-			if self.romof != None:
-				msgs = Rom (con, self.romof).copyrom()
-				self.msg.mix(msgs) 
-			self.__adddevs__()
-			self.__addchds__()
-			self.__addstuff__()
+		if not self.origin.exists:
+			self.msg.add (self.name,"Rom Filezip at romset do not exist", spool='error')
+		else:
+			if self.name != None:
+				self.__copyfile__()
+				self.__fixrnames__()
+				if self.romof != None:
+					msgs = Rom (con, self.romof).copyrom()
+					self.msg.mix(msgs) 
+				self.__adddevs__()
+				self.__addchds__()
+				self.__addstuff__()
 		return self.msg
 
 	def __fixrnames__(self):
@@ -842,7 +845,7 @@ class Rom:
 				self.msg.add(r,"No SHA1 found for this file at the DB")
 				continue
 			rdbname = cursor[0]
-			if rdbname == r and rdbname not in romlistzip:
+			if rdbname == r and rdbname in romlistzip:
 				continue
 			shutil.move (filerom, os.path.join(rtmppath,rdbname))
 			self.msg.add(rdbname,"This rom was renamed at the zipfile", spool='info')
