@@ -1346,12 +1346,12 @@ class Romset:
 			if oneshot is not None:
 				return oneshot[0]
 			print ("\n"*2, f">> searching {candidate}>>")
+			csearch = "%"+candidate+"%"
 			cursor = self.con.execute (f"SELECT name, description FROM games WHERE \
 						{opclones[opclones_st]} \
 						isdevice IS FALSE AND \
 						isbios IS FALSE AND \
-						description LIKE '%?%'", (candidate,)
-						)
+						description LIKE ?", (csearch,))
 			options = dict ()
 			counter = 0
 			for i in cursor:
