@@ -1645,7 +1645,7 @@ if __name__ == '__main__':
 			Romset (con).Updatecsv()
 		elif action == "10":
 			Bios(con).movebios()
-		elif action == "":
+		elif action == "" or action.lower() == "exit":
 			print ("Done!")
 			exit ()
 		else:
