@@ -854,13 +854,13 @@ class Rom:
 			# Create new zip file
 			os.remove(self.dest.file)
 			a = zipfile.ZipFile(self.dest.file, mode='w')
-			filelist = glob (os.path.join(rtmppath,"*.*"))
+			filelist = [arch for arch in os.scandir(rtmppath) if arch.is_file()]
 			for f in filelist:
-				a.write(filename = f, arcname = os.path.basename(f))
+				a.write(filename = f, arcname = f.name)
 			a.close()
 		if itemcheck(rtmppath)=='folder':
 			shutil.rmtree(rtmppath)
-
+			
 	def __copyfile__ (self):
 		""" copy a romfile to roms folder
 			"""
