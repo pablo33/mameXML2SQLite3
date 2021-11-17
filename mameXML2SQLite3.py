@@ -946,6 +946,9 @@ class Rom:
 		mergezip  = zipfile.ZipFile(self.dest.file, mode='a')
 		if len (tomerge) > 0:
 			for i in tomerge:
+				if i not in sourcezip.namelist():
+					self.msg.add (self.name, f"File {i} is not present at {sourcepath} rom", spool="error")
+					continue
 				sourcezip.extract (i, path=tmppath)
 				mergezip.write(os.path.join(tmppath,i),i)
 				print (f"Added {i} device file to rom.")
@@ -955,7 +958,7 @@ class Rom:
 		return
 
 	def __fileromset__ (self, romname, table, field):
-		""" Returns a set of fileroms the Database, tables of roms, devices or disks
+		""" Returns a set of fileroms at the Database, tables of roms, devices or disks
 			"""
 		
 		if self.name != None:
