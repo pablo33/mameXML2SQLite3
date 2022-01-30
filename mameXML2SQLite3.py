@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 # -*- encoding: utf-8 -*-
 
-__version__ = "0.44beta"
+__version__ = "0.50beta"
 __author__  = "pablo33"
 __doc__		= """
 	This software helps you managing a Mame Romset.
@@ -20,7 +20,6 @@ __doc__		= """
 
 # Standard libray imports
 import os, configparser, argparse, sqlite3, re, shutil, zipfile, csv
-from sqlite3.dbapi2 import Cursor
 from sys import exit
 from hashlib import sha1
 from glob import glob
@@ -748,6 +747,7 @@ class Rom:
 		romheads = self.con.execute (f'SELECT name,cloneof,romof, isbios FROM games WHERE name = "{romname}"').fetchone()
 		self.stuff = {
 			'snap'		: (snappath,	os.path.join(crsetpath,'snap'),		'.*'),
+			'vsnap'		: (vsnappath,	os.path.join(crsetpath,'videos'),	'.mp4'),
 			'cheat'		: (cheatpath,	os.path.join(crsetpath,'cheat'),	'.xml'),
 			'samples'	: (samplespath,	os.path.join(crsetpath,'samples'),	'.zip'),
 			}
@@ -803,7 +803,7 @@ class Rom:
 			- adds devices to the zip-file that are stored as part of the romset
 			- TODO: rename existent roms according to its SHA1.
 			- adds required CHDs
-			- stuff
+			- adds stuff: image-snapshot, video-snapshot, cheats, samples.
 			"""
 		self.msg = Messages(self.name)
 		if not self.origin.exists:
@@ -1138,6 +1138,7 @@ class Rom:
 	def __addstuff__ (self):
 		""" Adds stuff to the correspondent rom:
 			snaps
+			videosnaps
 			cheats
 			samples
 			"""
@@ -1538,7 +1539,9 @@ if __name__ == '__main__':
 	parser.add_argument("-sm", "--samples", default=os.path.join(rsetpath,"samples"),
 						help="samples folder")
 	parser.add_argument("-sn", "--snap", default=os.path.join(rsetpath,artworkpath,"snap"),
-						help="artwork snap folder")
+						help="artwork snap folder. It's part of your custom Romset")
+	parser.add_argument("-vd", "--videos", default=os.path.join(rsetpath,artworkpath,"videos"),
+						help="artwork snaps videos folder. It's part of your custom Romset. Only .mp4 videos.")
 	parser.add_argument("-r", "--customromset", default=crsetpath,
 						help="Your custom rom folder. There will go your custom set of games-roms and stuff")
 
@@ -1557,6 +1560,7 @@ if __name__ == '__main__':
 	cheatpath	= args.cheat
 			#defaults on romset/mameartwork
 	snappath	= args.snap
+	vsnappath 	= args.videos
 
 	# Checking parameters
 	errorlist 	= []
@@ -1583,6 +1587,9 @@ if __name__ == '__main__':
 	if itemcheck(snappath) 	!= "folder":
 		warninglist.append (f"I can't find the snap folder:(--snap {snappath})")
 		snappath = None
+	if itemcheck(vsnappath) 	!= "folder":
+		warninglist.append (f"I can't find the video snap folder:(--videos {vsnappath})")
+		vsnappath = None
 
 	if len (warninglist) > 0:
 		for i in warninglist:
