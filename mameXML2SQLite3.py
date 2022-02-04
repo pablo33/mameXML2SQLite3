@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 # -*- encoding: utf-8 -*-
 
-__version__ = "0.50beta"
+__version__ = "0.51"
 __author__  = "pablo33"
 __doc__		= """
 	This software helps you managing a Mame Romset.
@@ -20,6 +20,7 @@ __doc__		= """
 
 # Standard libray imports
 import os, configparser, argparse, sqlite3, re, shutil, zipfile, csv
+from warnings import filters
 from sys import exit
 from hashlib import sha1
 from glob import glob
@@ -85,7 +86,8 @@ class Messages ():
 			self.success = False
 		elif spool == 'info':
 			self.Imsg.append ((item, text))
-		self.Wmsg.append ((item, text))
+		else:
+			self.Wmsg.append ((item, text))
 		if self.verbose:
 			print (f'{self.name} : {item} : {text}')
 	
@@ -806,6 +808,9 @@ class Rom:
 			- adds stuff: image-snapshot, video-snapshot, cheats, samples.
 			"""
 		self.msg = Messages(self.name)
+		# exiting if rom is not at the database
+		if self.name == None:
+			return self.msg
 		if not self.origin.exists:
 			self.msg.add (self.name,"Rom Filezip at romset do not exist", spool='error')
 		else:
@@ -817,7 +822,7 @@ class Rom:
 					self.msg.mix(msgs) 
 				self.__adddevs__()
 				self.__addchds__()
-				self.__addstuff__()
+				self.addstuff()
 		return self.msg
 
 	def __fixrnames__(self):
@@ -1135,52 +1140,62 @@ class Rom:
 			return os.path.join(filelist[0])
 		return None
 
-	def __addstuff__ (self):
-		""" Adds stuff to the correspondent rom:
-			snaps
-			videosnaps
-			cheats
-			samples
+	def addstuff (self, filterstuff=None):
+		""" Adds stuff to the correspondent rom. Keywords on CSV file are
+			snap	- for image snapshots
+			vsnap	- for video snaps
+			cheat	- for cheats
+			samples - for samples files
 			"""
-		for i in self.stuff:
-			originpath, destpath, filetype = self.stuff[i]
-			# Overriding inexistent origin folders
-			if originpath == None:
-				continue
-			# Overriding games with no samples 
-			if i == 'samples' and len (self.__fileromset__(self.name, i, 'spl_name')) == 0:
-				continue
-			unzip = False
-			print (f"{self.name} attaching {i}")
-			origin = self.__identifile__(originpath, filetype)
-			if origin == None:
-				origin = os.path.join(originpath,os.path.basename(originpath))+'.zip' # search for a zip file
-				if itemcheck (origin) == 'file':
-					ziplist = self.__filezipromset__(origin)
-					element = self.name + filetype
-					if element in ziplist:
- 						unzip = True
+		# Bypassing on inexitent roms at database
+		if self.name != None:
+			for i in self.stuff:
+				# Overriding when there is a filter for the stuff
+				if filterstuff != None and filterstuff != i:
+					continue
+				originpath, destpath, filetype = self.stuff[i]
+				# Overriding inexistent origin folders
+				if originpath == None:
+					continue
+				# Overriding games with no samples 
+				if i == 'samples' and len (self.__fileromset__(self.name, i, 'spl_name')) == 0:
+					if filterstuff == None:
+						continue
 					else:
-						self.msg.add(f"{i}","No file found for the game")
-						continue	
+						self.msg.add(f"{i}","No samples for this rom",spool='warning')
+						return self.msg
+				unzip = False
+				origin = self.__identifile__(originpath, filetype)
+				if origin == None:
+					origin = os.path.join(originpath,os.path.basename(originpath))+'.zip' # search for a zip file
+					if itemcheck (origin) == 'file':
+						ziplist = self.__filezipromset__(origin)
+						element = self.name + filetype
+						if element in ziplist:
+							unzip = True
+						else:
+							self.msg.add(f"{i}","No file found for the game",spool='warning')
+							continue	
+					else:
+						self.msg.add(f"{i}","No file found for the game",spool='warning')
+						continue
+				dest = os.path.join(destpath, os.path.basename(origin))
+				if itemcheck (dest) == 'file':
+					self.msg.add(f'{i}',f"file already exist", spool='info')
+					continue
+				if itemcheck (destpath) != "folder":
+					os.mkdir(destpath)
+				if unzip:
+					try:
+						zipfile.ZipFile(origin, mode='r').extract(element, destpath)
+					except zipfile.BadZipFile:
+						self.msg.add(f"adding {i}","Its a bad zipfile", spool="error")
+						continue
 				else:
-					self.msg.add(f"{i}","No file found for the game")
-					continue
-			dest = os.path.join(destpath, os.path.basename(origin))
-			if itemcheck (dest) == 'file':
-				self.msg.add(f'{i}',f"file already exist", spool='info')
-				continue
-			if itemcheck (destpath) != "folder":
-				os.mkdir(destpath)
-			if unzip:
-				try:
-					zipfile.ZipFile(origin, mode='r').extract(element, destpath)
-				except zipfile.BadZipFile:
-					self.msg.add(f"adding {i}","Its a bad zipfile", spool="error")
-					continue
-			else:
-				shutil.copyfile (origin, dest)
-	
+					shutil.copyfile (origin, dest)
+		if filterstuff != None:
+			return self.msg
+		
 	def __removestuff__(self):
 		""" Removes rom Stuff form the custom roms library
 			"""
@@ -1198,7 +1213,7 @@ class Romset:
 			"""
 		self.con = con						# connection to SQLite3 Database
 		self.myCSVfile = os.path.join(crsetpath,"gamelist.csv")		
-		self.availableactions = ("add","remove","check")
+		self.availableactions = ("add","remove","check","add rom","add snap","add vsnap","add cheat", "add samples")
 
 	def games2csv(self):
 		""" Generates a CSV file with the gamelist based on filters.
@@ -1275,8 +1290,13 @@ class Romset:
 	def processCSVlist (self):
 		""" Proccess CSV file with the gamelist and searchs and execute actions.
 			actions are stored as text on 'action' column, and for now current actions are:
-				add		: to add a game from the romset to the custom rom folder
-				delete	: to delete a game-rom from the custom rom folder.
+				add		: to add a game from the romset to the custom rom folder and related stuff
+				add rom		: only adds roms and dependants
+				add snap	: only adds image snapshots
+				add vsnap	: only adds video snapshots
+				add cheat	: only adds cheats
+				add samples	: only adds samples
+				delete	: to delete a game-rom from the custom rom folder and related stuff
 				check	: to check a rom-game files, chds, integrity.
 			"""
 		# Checking if gamelist file exists
@@ -1298,7 +1318,7 @@ class Romset:
 					postkey = None
 					if datadict ['action'].lower() in self.availableactions:
 						postkey = self.__dofileaction__ (datadict['action'].lower(), datadict['name'])
-						print (f"{datadict['name']}: {postkey}")
+						print (f"{datadict['name']} : {postkey}")
 						datadict ['action'] = postkey
 					writer.writerow (rowdict=datadict)
 		os.remove (self.myCSVfile)
@@ -1311,6 +1331,17 @@ class Romset:
 			if msg.success:
 				return 'added'
 			return 'error'
+		
+		if action.startswith('add') and action != 'add':
+			filterstuff = action.replace('add','').strip()
+			msg = Rom (self.con, romname).addstuff(filterstuff=filterstuff)
+			if msg.Wmsg != []:
+				return f'No {filterstuff} found'
+			elif not msg.success:
+				return 'error'
+			else:
+				return 'added'
+
 		if action == 'remove':
 			msg = Rom (self.con, romname).removerom()
 			if msg.success:
